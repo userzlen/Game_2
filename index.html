@@ -58,6 +58,16 @@
   .invite-url{font-family:monospace;font-size:13px;color:#88aaff;padding:10px 16px;background:#0a1a2a;border:1px solid #2a4a6a;border-radius:6px;margin:8px 0;max-width:90vw;overflow:auto;user-select:all;word-break:break-all;}
   #status{font-size:14px;color:#88a0b8;margin:12px 0;}
   #mp-indicator{position:absolute;top:8px;right:8px;font-size:11px;padding:4px 10px;background:rgba(0,0,0,0.7);border:1px solid #2a4a6a;border-radius:4px;color:#88a0b8;z-index:11;}
+  #sandbox-admin{position:fixed;right:16px;top:82px;width:min(300px,calc(100vw - 32px));max-height:calc(100vh - 110px);overflow:auto;z-index:25;display:none;pointer-events:auto;background:linear-gradient(160deg,rgba(13,20,31,.97),rgba(5,9,16,.97));border:1px solid rgba(120,165,210,.55);border-radius:10px;box-shadow:0 14px 44px rgba(0,0,0,.55);padding:14px;color:#e7f0fa;}
+  #sandbox-admin.show{display:block;}
+  #sandbox-admin h3{margin:0 0 4px;font-size:15px;letter-spacing:1.5px;color:#a9d2ff;}
+  #sandbox-admin .admin-sub{font-size:11px;color:#7890a8;margin-bottom:12px;}
+  #sandbox-admin .admin-btn{display:flex;align-items:center;justify-content:space-between;width:100%;margin:6px 0;padding:10px 11px;border-radius:6px;border:1px solid #34506b;background:#142337;color:#e8f2ff;font:600 12px inherit;cursor:pointer;text-align:left;}
+  #sandbox-admin .admin-btn:hover{background:#203b58;border-color:#79b7ee;}
+  #sandbox-admin .admin-btn.active{border-color:#58b982;background:#123426;color:#aaffcb;}
+  #sandbox-admin .admin-btn.danger{border-color:#81454a;background:#32191d;}
+  #sandbox-admin .admin-note{font-size:10px;color:#71869b;line-height:1.4;margin-top:10px;}
+  #sandbox-admin .admin-status{font-size:11px;color:#9bc7f0;margin:8px 0 2px;min-height:16px;}
 </style>
 </head>
 <body>
@@ -77,6 +87,15 @@
   <div id="bottom"></div>
 </div>
 <div id="mp-indicator" style="display:none;"></div>
+<div id="sandbox-admin" aria-label="Панель администратора песочницы">
+  <h3>АДМИН-ПАНЕЛЬ</h3><div class="admin-sub">ПЕСОЧНИЦА · F2 — показать / скрыть</div>
+  <button class="admin-btn" id="admin-fly" onclick="window.__sandboxToggleFly()"><span>Полёт</span><b id="admin-fly-state">ВЫКЛ</b></button>
+  <button class="admin-btn" onclick="window.__sandboxRestoreMap()"><span>Восстановить карту</span><b>↻</b></button>
+  <button class="admin-btn" id="admin-spawn-killer" onclick="window.__sandboxSpawnKiller()"><span>Заспавнить киллера</span><b>＋</b></button>
+  <button class="admin-btn" id="admin-freeze-killer" onclick="window.__sandboxToggleFreeze()"><span>Заморозить киллера</span><b id="admin-freeze-state">—</b></button>
+  <div class="admin-status" id="admin-status">Изменения действуют только в песочнице</div>
+  <div class="admin-note">Полёт: WASD — движение, Space — вверх, Shift — вниз. F2 скрывает панель, H скрывает HUD.</div>
+</div>
 <div id="screen"></div>
 <div id="loading">
   <div class="spinner"></div>
@@ -287,6 +306,7 @@ const smokeClouds = [], bloodTrail = [], traps = [], hatchets = [];
 let screenShake = 0;
 const game = {screen:'loading',time:0,hint:'',hintTime:0};
 let sandboxMode = false, sandboxHudVisible = true;
+let sandboxFlyEnabled = false, sandboxFlyHeight = 0, sandboxKillerActive = false, sandboxKillerFrozen = false;
 let selectedSurvivor = 'sprinter', selectedItem = 'flashlight', killerAbilityKey = 'dash';
 let playerRole = 'survivor';
 let revealStartTime = 0;
@@ -2343,6 +2363,10 @@ addEventListener('keydown', e => {
     keys[k]=true;
     if ([' ','arrowup','arrowdown','arrowleft','arrowright','e','r','f'].includes(k)) e.preventDefault();
     if (game.screen!=='playing') return;
+    if (sandboxMode && k==='f2') {
+      document.getElementById('sandbox-admin')?.classList.toggle('show');
+      return;
+    }
     if (sandboxMode && k==='h') {
       sandboxHudVisible = !sandboxHudVisible;
       document.getElementById('hud').style.display = sandboxHudVisible ? '' : 'none';
@@ -2392,7 +2416,7 @@ function sync3D(dt){
   if (!survivorMesh||!killerMesh) return;
   const myIsSurvivor = playerRole === 'survivor';
   survivorMesh.visible = !myIsSurvivor;
-  killerMesh.visible = playerRole !== 'killer' && !sandboxMode;
+  killerMesh.visible = (playerRole !== 'killer' && !sandboxMode) || (sandboxMode && sandboxKillerActive);
   if(firstPersonRepairRig){
     const showHands=myIsSurvivor&&survivor.state==='idle'&&!!(survivor.repairing&&survivor.repairing.type==='gen');
     firstPersonRepairRig.group.visible=showHands;
@@ -2648,7 +2672,7 @@ function sync3D(dt){
 
   const target = myIsSurvivor ? survivor : killer;
   const eyeY = myIsSurvivor ? 1.6 : 1.78;
-  let camX = PX(target.x), camZ = PX(target.y), camY = eyeY;
+  let camX = PX(target.x), camZ = PX(target.y), camY = eyeY + (sandboxMode && sandboxFlyEnabled ? sandboxFlyHeight : 0);
   if (target.state === 'vaulting') camY += Math.sin((target.vaultTimer/target.vaultDuration) * Math.PI) * 0.6;
   camera3d.position.set(camX, camY, camZ);
   const pitch = target.pitch || 0, yaw = target.facing;
@@ -2847,6 +2871,9 @@ window.__sandbox = () => {
   document.getElementById('hud').style.display = '';
   document.getElementById('crosshair').style.display = '';
   resetGame();
+  sandboxFlyEnabled=false; sandboxFlyHeight=0; sandboxKillerActive=false; sandboxKillerFrozen=false;
+  document.getElementById('sandbox-admin')?.classList.add('show');
+  refreshSandboxAdmin();
   survivor.x = 150; survivor.y = 150; survivor.facing = 0; survivor.pitch = 0;
   killer.x = -5000; killer.y = -5000;
   game.screen = 'playing'; game.hint = 'ПЕСОЧНИЦА: исследуй карту. H — скрыть интерфейс, Esc — меню паузы.'; game.hintTime = 10;
@@ -2915,6 +2942,57 @@ window.__doJoin = async () => {
 window.__resume = () => { game.screen = 'playing'; hideScreen(); };
 window.__restart = () => { if (MP.active && MP.role === 'guest') return; restartGame(); };
 
+function refreshSandboxAdmin(){
+  const fly=document.getElementById('admin-fly'),flyState=document.getElementById('admin-fly-state');
+  const freeze=document.getElementById('admin-freeze-killer'),freezeState=document.getElementById('admin-freeze-state');
+  const spawn=document.getElementById('admin-spawn-killer');
+  if(fly){fly.classList.toggle('active',sandboxFlyEnabled);}
+  if(flyState)flyState.textContent=sandboxFlyEnabled?'ВКЛ':'ВЫКЛ';
+  if(freeze){freeze.classList.toggle('active',sandboxKillerFrozen);freeze.disabled=!sandboxKillerActive;freeze.style.opacity=sandboxKillerActive?'1':'.45';}
+  if(freezeState)freezeState.textContent=!sandboxKillerActive?'НЕТ КИЛЛЕРА':(sandboxKillerFrozen?'ЗАМОРОЖЕН':'АКТИВЕН');
+  if(spawn)spawn.classList.toggle('active',sandboxKillerActive);
+}
+function sandboxAdminMessage(message){
+  const el=document.getElementById('admin-status');if(el)el.textContent=message;
+}
+function restoreSandboxMap(){
+  for(const p of pallets){p.state='upright';p.fallTimer=0;p.breakTimer=0;p.visualAngle=Math.PI*0.44;p.fallDir=1;}
+  for(const w of windows){w.vaultTimestamps=[];w.blockedTimer=0;}
+  for(const g of generators){g.progress=0;g.done=false;}
+  for(const e of exitDoors){e.opened=false;e.openProgress=0;}
+  totem.broken=false;totem.progress=0;
+  survivor.repairing=null;survivor.repairTimer=0;
+  smokeClouds.length=0;bloodTrail.length=0;traps.length=0;hatchets.length=0;
+  screenShake=0;costMap=null;
+  sandboxAdminMessage('Карта восстановлена: паллеты, окна, генераторы и выходы сброшены.');
+}
+window.__sandboxToggleFly=()=>{
+  if(!sandboxMode)return;
+  sandboxFlyEnabled=!sandboxFlyEnabled;
+  if(!sandboxFlyEnabled)sandboxFlyHeight=0;
+  refreshSandboxAdmin();
+  sandboxAdminMessage(sandboxFlyEnabled?'Полёт включён. Space — вверх, Shift — вниз.':'Полёт выключен.');
+};
+window.__sandboxRestoreMap=()=>{
+  if(!sandboxMode)return;
+  restoreSandboxMap();
+};
+window.__sandboxSpawnKiller=()=>{
+  if(!sandboxMode)return;
+  sandboxKillerActive=true;sandboxKillerFrozen=false;
+  killer.x=2250;killer.y=1450;killer.facing=Math.atan2(survivor.y-killer.y,survivor.x-killer.x);
+  killer.pitch=0;killer.state='idle';killer.stunTimer=0;killer.blindTimer=0;killer.slowTimer=0;
+  killer.path=null;killer.pathTimer=0;killer.lastSeen=null;killer.lastSeenTime=-999;
+  refreshSandboxAdmin();sandboxAdminMessage('Киллер появился на карте и может преследовать игрока.');
+};
+window.__sandboxToggleFreeze=()=>{
+  if(!sandboxMode||!sandboxKillerActive)return;
+  sandboxKillerFrozen=!sandboxKillerFrozen;
+  if(sandboxKillerFrozen){killer.state='idle';killer.path=null;killer.attackLungeTimer=0;killer.attackChargeTimer=0;killer.attackAnimTimer=0;}
+  refreshSandboxAdmin();
+  sandboxAdminMessage(sandboxKillerFrozen?'Киллер заморожен.':'Киллер разморожен.');
+};
+
 function resetGame(){
   survivor.x=150; survivor.y=150; survivor.state='idle';
   survivor.vaultTimer=0; survivor.vaultCooldown=0; survivor.facing=0; survivor.pitch=0; survivor.walkPhase=0;
@@ -2958,6 +3036,8 @@ function beginPlaying(){
   if (MP.active) {
     playerRole = MP.myRole;
   }
+  document.getElementById('sandbox-admin')?.classList.remove('show');
+  sandboxFlyEnabled=false; sandboxFlyHeight=0; sandboxKillerActive=false; sandboxKillerFrozen=false;
   game.screen = 'playing';
   hideScreen();
   snapCamera();
@@ -2988,10 +3068,12 @@ function loop(now){
       const fEdge = pInput.f && !prevF;
       prevSpace=pInput.space; prevE=pInput.e; prevF=pInput.f;
       updateSurvivorInput(dt,pInput);
+      if(sandboxFlyEnabled){ sandboxFlyHeight=Math.max(0,Math.min(10,sandboxFlyHeight+((keys[' ']?1:0)-(keys['shift']?1:0))*dt*4)); }
       if(eEdge) tryInteractSingle();
       if(pInput.e) tryInteractHold(pInput,dt); else { survivor.repairing=null; survivor.repairTimer=0; }
-      if(spaceEdge) tryAbility();
+      if(spaceEdge&&!sandboxFlyEnabled) tryAbility();
       if(selectedItem==='flashlight') updateFlashlight(dt,pInput.f); else if(fEdge) tryUseItem();
+      if(sandboxKillerActive&&!sandboxKillerFrozen) updateKillerAI(dt);
       updatePallets(dt); updateWindows(dt); updateSmoke(dt); updateTraps(dt); updateHatchets(dt); updateBloodTrail(dt);
     } else if (MP.active && MP.role === 'guest') {
       sendInput();
