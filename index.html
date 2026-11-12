@@ -52,6 +52,8 @@
   #fatal pre{color:#ffaaaa;font-family:monospace;font-size:12px;background:#000;padding:16px;border-radius:6px;max-width:900px;overflow:auto;white-space:pre-wrap;line-height:1.5;border:1px solid #4a1010;}
   #crosshair{position:absolute;top:50%;left:50%;width:4px;height:4px;background:rgba(255,255,255,0.7);border-radius:50%;transform:translate(-50%,-50%);pointer-events:none;z-index:5;display:none;}
   #crosshair.show{display:block;}
+  #blind-effect{position:fixed;inset:0;z-index:9;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,rgba(245,248,255,.9) 0%,rgba(190,200,225,.62) 42%,rgba(18,5,18,.9) 100%);mix-blend-mode:screen;transition:opacity .08s linear;}
+  #blind-effect::after{content:'ОСЛЕПЛЁН';position:absolute;left:50%;top:18%;transform:translateX(-50%);font-weight:900;letter-spacing:7px;font-size:clamp(18px,3vw,34px);color:#fff;text-shadow:0 2px 18px #000;}
   .room-code{font-family:monospace;font-size:36px;letter-spacing:8px;color:#ffdd44;padding:16px 24px;background:#000;border:2px solid #5a9ad0;border-radius:8px;margin:16px 0;user-select:all;}
   .invite-url{font-family:monospace;font-size:13px;color:#88aaff;padding:10px 16px;background:#0a1a2a;border:1px solid #2a4a6a;border-radius:6px;margin:8px 0;max-width:90vw;overflow:auto;user-select:all;word-break:break-all;}
   #status{font-size:14px;color:#88a0b8;margin:12px 0;}
@@ -61,6 +63,7 @@
 <body>
 <canvas id="game"></canvas>
 <div id="crosshair"></div>
+<div id="blind-effect"></div>
 <div id="hud">
   <div class="hud-top">
     <div class="hud-block"><div class="hud-label">Роль</div><div class="hud-value" id="roleText">—</div></div>
@@ -123,7 +126,7 @@ const CFG = {
   WINDOW_BLOCK_AFTER:3, WINDOW_BLOCK_TIME:16, WINDOW_VAULT_RESET:12,
   CHASE_RANGE:400, FLASHLIGHT_RANGE:250, FLASHLIGHT_ANGLE:0.6,
   HEAL_TIME:3, HIT_COOLDOWN:1.2, INJURED_SPEED_MULT:0.92,
-  GENERATOR_COUNT:5, GENERATOR_REPAIR_TIME:15, GENERATOR_INTERACT:75,
+  GENERATOR_COUNT:3, GENERATOR_REPAIR_TIME:10, GENERATOR_INTERACT:75,
   EXIT_OPEN_TIME:3, EXIT_INTERACT:80,
   BLOOD_TRAIL_INTERVAL:0.3, BLOOD_TRAIL_LIFETIME:8,
   BLOODLUST_THRESHOLD:10, BLOODLUST_MAX:3,
@@ -137,7 +140,8 @@ const CFG = {
   LAST_SEEN_TIMEOUT:8, AUTO_INSTINCT_TIMEOUT:6, AUTO_INSTINCT_RANGE:500,
   INTERCEPT_LOOKAHEAD:0.7, INTERCEPT_MAX:1.0,
   INJURED_CHASE_COMMIT:12, CAUTIOUS_TIME:3,
-  KILLER_ATTACK_COOLDOWN:0.7,
+  KILLER_ATTACK_COOLDOWN:0.85, FLASHLIGHT_BLIND_TIME:4, FLASHLIGHT_SLOW_TIME:1.5,
+  ATTACK_CHARGE_TIME:0.2, ATTACK_LUNGE_TIME:0.3, ATTACK_LUNGE_SPEED:390,
 };
 const S = 40;
 const PX = (px) => px / S;
@@ -217,7 +221,7 @@ const windows = [
 ];
 function makePallet(x,y){return{x,y,angle:0,state:'upright',fallTimer:0,breakTimer:0,fallDir:1,visualAngle:Math.PI*0.44};}
 const pallets = [
-  makePallet(1210,890), makePallet(390,490), makePallet(2000,490),
+  makePallet(1180,930), makePallet(390,490), makePallet(2000,490),
   makePallet(430,1370), makePallet(2020,1330), makePallet(700,790),
   makePallet(1760,790), makePallet(980,390), makePallet(980,1340),
 ];
@@ -226,19 +230,19 @@ const exitDoors = [
   {x:2310,y:760,w:60,h:80,opened:false,openProgress:0},
 ];
 const generators = [
-  {x:800,y:200,progress:0,done:false},{x:1600,y:200,progress:0,done:false},
-  {x:800,y:1400,progress:0,done:false},{x:1600,y:1400,progress:0,done:false},
-  {x:1200,y:800,progress:0,done:false},
+  {x:700,y:600,progress:0,done:false},
+  {x:1700,y:600,progress:0,done:false},
+  {x:1200,y:1450,progress:0,done:false},
 ];
 const totem = {x:1200,y:400,broken:false,progress:0};
 const decor = [
   {type:'tree',x:1450,y:600,r:30},{type:'tree',x:950,y:1000,r:28},
   {type:'tree',x:1450,y:1000,r:30},{type:'tree',x:950,y:600,r:32},
   {type:'tree',x:400,y:800,r:22},{type:'tree',x:2000,y:800,r:24},
-  {type:'rock',x:900,y:400,r:22},{type:'rock',x:1500,y:400,r:20},
+  {type:'rock',x:930,y:500,r:22},{type:'rock',x:1500,y:400,r:20},
   {type:'rock',x:900,y:1200,r:24},{type:'rock',x:1500,y:1200,r:22},
   {type:'rock',x:1100,y:1450,r:18},{type:'rock',x:1300,y:150,r:20},
-  {type:'bush',x:1050,y:1350,r:26},{type:'bush',x:1350,y:1350,r:24},
+  {type:'bush',x:950,y:1450,r:26},{type:'bush',x:1350,y:1350,r:24},
   {type:'bush',x:1050,y:250,r:22},{type:'bush',x:1350,y:250,r:24},
 ];
 const PATROL_POINTS = [
@@ -250,14 +254,15 @@ const survivor = {
   x:150,y:150,radius:CFG.SURVIVOR_RADIUS,state:'idle',facing:0,pitch:0,walkPhase:0,
   vaultTimer:0,vaultDuration:0,vaultCooldown:0,vaultFrom:{x:0,y:0},vaultTo:{x:0,y:0},
   abilityCooldown:0,speedBoostTimer:0,vaultBoostTimer:0,invisibleTimer:0,invulnerableTimer:0,
-  itemCooldown:0,itemUsed:false,hitOnce:false,slowTimer:0,
-  health:'healthy',hitCooldown:0,healTimer:0,bloodTimer:0,
+  itemCooldown:0,itemUsed:false,hitOnce:false,slowTimer:0,flashlightCharge:0,flashlightActive:false,
+  health:'healthy',hitCooldown:0,healTimer:0,bloodTimer:0,animEvent:'idle',animTimer:0,isMoving:false,
   lastKnownPos:{x:0,y:0},isInChase:false,vx:0,vy:0,
   noTrailTimer:0,litheTimer:0,repairing:null,repairTimer:0,trailTimer:0,
 };
 const killer = {
   x:2250,y:1450,radius:CFG.KILLER_RADIUS,state:'idle',facing:Math.PI,pitch:0,walkPhase:0,
-  stunTimer:0,breakTimer:0,breakTarget:null,attackCooldown:0,
+  stunTimer:0,breakTimer:0,breakTarget:null,attackCooldown:0,blindTimer:0,slowTimer:0,
+  attackHeldPrev:false,attackChargeTimer:0,attackLungeTimer:0,attackLungeDirX:1,attackLungeDirY:0,attackAnimTimer:0,attackAnimType:'',animEvent:'idle',animTimer:0,
   vaultTimer:0,vaultDuration:0,vaultFrom:{x:0,y:0},vaultTo:{x:0,y:0},
   path:null,pathTimer:0,stuckTimer:0,palletStuckTimer:0,
   dashCooldown:0,dashWindupTimer:0,dashTimer:0,dashDirX:1,dashDirY:0,
@@ -297,7 +302,7 @@ const SB = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, 
 
 let THREE = null;
 let scene, camera3d, renderer, sunLight;
-let survivorMesh, killerMesh, killerAuraLight;
+let survivorMesh, killerMesh, killerAuraLight, firstPersonRepairRig=null;
 const palletMeshes = [], generatorMeshes = [], exitMeshes = [], windowMeshes = [];
 const bloodTrailMeshes = [], trapMeshes = [], hatchetMeshes = [], smokeMeshes = [];
 const totemMesh = {group:null, light:null};
@@ -630,16 +635,20 @@ function broadcastState(){
     survivor: {
       x: survivor.x, y: survivor.y, facing: survivor.facing, pitch: survivor.pitch,
       state: survivor.state, health: survivor.health, vaultTimer: survivor.vaultTimer,
+      animEvent:survivor.animEvent,animTimer:survivor.animTimer,isMoving:survivor.isMoving,
       vaultDuration: survivor.vaultDuration, walkPhase: survivor.walkPhase,
       invisibleTimer: survivor.invisibleTimer, speedBoostTimer: survivor.speedBoostTimer,
       hitCooldown: survivor.hitCooldown, abilityCooldown: survivor.abilityCooldown,
       itemCooldown: survivor.itemCooldown,
+      repairingGenerator: survivor.repairing && survivor.repairing.type === 'gen' ? generators.indexOf(survivor.repairing.ref) : -1,
+      flashlightActive:survivor.flashlightActive,flashlightCharge:survivor.flashlightCharge,
     },
     killer: {
       x: killer.x, y: killer.y, facing: killer.facing, pitch: killer.pitch, state: killer.state,
       stunTimer: killer.stunTimer, vaultTimer: killer.vaultTimer, vaultDuration: killer.vaultDuration,
       walkPhase: killer.walkPhase, invisibleTimer: killer.invisibleTimer,
       bloodlust: killer.bloodlust, abilityDisabledTimer: killer.abilityDisabledTimer,
+      blindTimer:killer.blindTimer,slowTimer:killer.slowTimer,attackAnimTimer:killer.attackAnimTimer,attackAnimType:killer.attackAnimType,animEvent:killer.animEvent,animTimer:killer.animTimer,
     },
     pallets: pallets.map(p => ({ state: p.state, fallTimer: p.fallTimer, breakTimer: p.breakTimer, visualAngle: p.visualAngle })),
     generators: generators.map(g => ({ progress: g.progress, done: g.done })),
@@ -674,6 +683,7 @@ function applyStateToWorld(state){
   survivor.x = state.survivor.x; survivor.y = state.survivor.y;
   survivor.facing = state.survivor.facing; survivor.pitch = state.survivor.pitch;
   survivor.state = state.survivor.state; survivor.health = state.survivor.health;
+  survivor.animEvent=state.survivor.animEvent||'idle';survivor.animTimer=state.survivor.animTimer||0;survivor.isMoving=!!state.survivor.isMoving;
   survivor.vaultTimer = state.survivor.vaultTimer; survivor.vaultDuration = state.survivor.vaultDuration;
   survivor.walkPhase = state.survivor.walkPhase;
   survivor.invisibleTimer = state.survivor.invisibleTimer;
@@ -681,11 +691,16 @@ function applyStateToWorld(state){
   survivor.hitCooldown = state.survivor.hitCooldown;
   survivor.abilityCooldown = state.survivor.abilityCooldown;
   survivor.itemCooldown = state.survivor.itemCooldown;
+  survivor.flashlightActive=!!state.survivor.flashlightActive;survivor.flashlightCharge=state.survivor.flashlightCharge||0;
+  survivor.repairing = Number.isInteger(state.survivor.repairingGenerator) && state.survivor.repairingGenerator >= 0 && generators[state.survivor.repairingGenerator] ? {type:'gen',ref:generators[state.survivor.repairingGenerator]} : null;
 
   killer.x = state.killer.x; killer.y = state.killer.y;
   killer.facing = state.killer.facing; killer.pitch = state.killer.pitch;
   killer.state = state.killer.state;
   killer.stunTimer = state.killer.stunTimer;
+  killer.blindTimer=state.killer.blindTimer||0;killer.slowTimer=state.killer.slowTimer||0;
+  killer.attackAnimTimer=state.killer.attackAnimTimer||0;killer.attackAnimType=state.killer.attackAnimType||'';
+  killer.animEvent=state.killer.animEvent||'idle';killer.animTimer=state.killer.animTimer||0;
   killer.vaultTimer = state.killer.vaultTimer;
   killer.vaultDuration = state.killer.vaultDuration;
   killer.walkPhase = state.killer.walkPhase;
@@ -723,6 +738,8 @@ function initThree(){
   scene.fog = new THREE.Fog(0x0a1018, 30, 90);
 
   camera3d = new THREE.PerspectiveCamera(75, CFG.W / Math.max(1, CFG.H), 0.1, 300);
+  const flashlightLight=new THREE.SpotLight(0xddeeff,0,PX(CFG.FLASHLIGHT_RANGE),0.34,0.62,1);flashlightLight.position.set(0.12,-0.12,-0.18);flashlightLight.target.position.set(0,0,-1);camera3d.add(flashlightLight);camera3d.add(flashlightLight.target);
+  const flashlightBeam=new THREE.Mesh(new THREE.ConeGeometry(1.4,6,24,1,true),new THREE.MeshBasicMaterial({color:0xcfe5ff,transparent:true,opacity:0.045,depthWrite:false,side:THREE.DoubleSide}));flashlightBeam.rotation.x=-Math.PI/2;flashlightBeam.position.set(0,-0.02,-3);flashlightBeam.visible=false;camera3d.add(flashlightBeam);camera3d.userData.flashlightLight=flashlightLight;camera3d.userData.flashlightBeam=flashlightBeam;
 
   const canvas = document.getElementById('game');
   try { renderer = new THREE.WebGLRenderer({canvas, antialias:true, powerPreference:'high-performance'}); }
@@ -813,7 +830,41 @@ function makeBush(r){
   return g;
 }
 
+// Keep decorative props clear of gameplay objects. If a prop overlaps a wall,
+// generator, pallet, window or another prop, move it to the nearest free grid point.
+function sanitizeDecorLayout(){
+  const blocked = (x,y,r,index) => {
+    if (x < r+35 || x > 2400-r-35 || y < r+35 || y > 1600-r-35) return true;
+    for (const w of walls) if (circleRect(x,y,r+8,w.x,w.y,w.w,w.h)) return true;
+    for (const gen of generators) if (Math.hypot(x-gen.x,y-gen.y) < r+68) return true;
+    if (!totem.broken && Math.hypot(x-totem.x,y-totem.y) < r+34) return true;
+    for (const p of pallets) if (Math.hypot(x-p.x,y-p.y) < r+72) return true;
+    for (const win of windows) if (circleRect(x,y,r+8,win.x-18,win.y-18,win.w+36,win.h+36)) return true;
+    for (const e of exitDoors) if (circleRect(x,y,r+8,e.x,e.y,e.w,e.h)) return true;
+    for (let i=0;i<index;i++){
+      const other=decor[i];
+      if (Math.hypot(x-other.x,y-other.y) < r+other.r+12) return true;
+    }
+    return false;
+  };
+  decor.forEach((d,index)=>{
+    if (!blocked(d.x,d.y,d.r,index)) return;
+    const ox=d.x, oy=d.y;
+    let placed=false;
+    for (let radius=40;radius<=320&&!placed;radius+=40){
+      for (let step=0;step<16;step++){
+        const angle=step*Math.PI/8;
+        const x=Math.round((ox+Math.cos(angle)*radius)/10)*10;
+        const y=Math.round((oy+Math.sin(angle)*radius)/10)*10;
+        if (!blocked(x,y,d.r,index)){d.x=x;d.y=y;placed=true;break;}
+      }
+    }
+    if (!placed) log('Не удалось автоматически переместить декор: '+d.type+' '+index);
+  });
+}
+
 function buildWorld(){
+  sanitizeDecorLayout();
   for (const w of walls){
     const m = new THREE.Mesh(new THREE.BoxGeometry(PX(w.w), 1.6, PX(w.h)), wallMat());
     m.position.set(PX(w.x + w.w/2), 0.8, PX(w.y + w.h/2));
@@ -851,23 +902,96 @@ function buildWorld(){
   }
   for (const gen of generators){
     const g = new THREE.Group();
-    const base = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.8, 0.6, 12), metalMat());
-    base.position.y = 0.3; base.castShadow = true; base.receiveShadow = true; g.add(base);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.08, 8, 16), new THREE.MeshStandardMaterial({color:0x4a5a6a, roughness:0.5, metalness:0.8}));
-    ring.rotation.x = Math.PI/2; ring.position.y = 0.65; g.add(ring);
-    const lights = [];
-    for (let j = 0; j < 3; j++){
-      const lm = new THREE.MeshBasicMaterial({color:0x333333});
-      const l = new THREE.Mesh(new THREE.SphereGeometry(0.1, 8, 8), lm);
-      const a = j * Math.PI * 2 / 3;
-      l.position.set(Math.cos(a)*0.5, 0.65, Math.sin(a)*0.5); g.add(l); lights.push(lm);
+    const darkMetal = new THREE.MeshStandardMaterial({color:0x252b30,roughness:0.58,metalness:0.78});
+    const steel = new THREE.MeshStandardMaterial({color:0x77818a,roughness:0.38,metalness:0.86});
+    const copper = new THREE.MeshStandardMaterial({color:0x9b5930,roughness:0.52,metalness:0.72});
+    const rubber = new THREE.MeshStandardMaterial({color:0x17191b,roughness:0.92});
+    const warning = new THREE.MeshStandardMaterial({color:0x9c3027,roughness:0.7});
+    const base = new THREE.Mesh(new THREE.BoxGeometry(1.75,0.18,1.05),darkMetal);
+    base.position.y=0.18;base.castShadow=true;base.receiveShadow=true;g.add(base);
+    for(const sx of [-0.68,0.68]) for(const sz of [-0.36,0.36]){
+      const foot=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.12,0.22,8),steel);
+      foot.position.set(sx,0.08,sz);foot.castShadow=true;g.add(foot);
     }
-    const barMat = new THREE.MeshBasicMaterial({color:0x66ff88});
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.15, 0.02), barMat);
-    bar.position.set(0, 1.2, 0); bar.scale.y = 0.01; g.add(bar);
-    const pl = new THREE.PointLight(0x88aaff, 0.4, 4); pl.position.y = 1; g.add(pl);
-    g.position.set(PX(gen.x), 0, PX(gen.y)); scene.add(g);
-    generatorMeshes.push({group:g, gen, lights, bar, pointLight:pl});
+    const engine=new THREE.Mesh(new THREE.BoxGeometry(0.78,0.72,0.68),darkMetal);
+    engine.position.set(-0.28,0.62,0);engine.castShadow=true;engine.receiveShadow=true;g.add(engine);
+    const cap=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.12,0.58),steel);
+    cap.position.set(-0.28,1.02,0);g.add(cap);
+    const coil=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.22,0.48,12),copper);
+    coil.rotation.z=Math.PI/2;coil.position.set(-0.28,0.62,0.39);g.add(coil);
+    const panel=new THREE.Mesh(new THREE.BoxGeometry(0.48,0.58,0.18),steel);
+    panel.position.set(0.48,0.56,0.34);panel.castShadow=true;g.add(panel);
+    const face=new THREE.Mesh(new THREE.BoxGeometry(0.38,0.42,0.035),darkMetal);
+    face.position.set(0.48,0.58,0.445);g.add(face);
+    const gauge=new THREE.Mesh(new THREE.CylinderGeometry(0.105,0.105,0.045,16),rubber);
+    gauge.rotation.x=Math.PI/2;gauge.position.set(0.48,0.72,0.48);g.add(gauge);
+    const gaugeFace=new THREE.Mesh(new THREE.CircleGeometry(0.082,16),new THREE.MeshBasicMaterial({color:0xd6c7a0}));
+    gaugeFace.position.set(0.48,0.72,0.507);g.add(gaugeFace);
+    const needle=new THREE.Mesh(new THREE.BoxGeometry(0.012,0.07,0.012),warning);
+    needle.position.set(0.49,0.73,0.52);needle.rotation.z=-0.45;g.add(needle);
+    const exhaust=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.09,0.48,8),steel);
+    exhaust.position.set(-0.55,1.08,-0.2);exhaust.rotation.z=-0.18;g.add(exhaust);
+    const tip=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.075,0.08,8),darkMetal);
+    tip.position.set(-0.59,1.32,-0.2);tip.rotation.z=-0.18;g.add(tip);
+    const fanPivot=new THREE.Group();fanPivot.position.set(0.25,0.68,-0.39);g.add(fanPivot);
+    const hub=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.12,12),copper);
+    hub.rotation.x=Math.PI/2;fanPivot.add(hub);
+    for(let j=0;j<4;j++){
+      const blade=new THREE.Mesh(new THREE.BoxGeometry(0.11,0.38,0.045),steel);
+      blade.position.y=0.22;blade.rotation.z=j*Math.PI/2;fanPivot.add(blade);
+    }
+    const pistonGroup=new THREE.Group();pistonGroup.position.set(-0.7,0.55,-0.38);g.add(pistonGroup);
+    const rod=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.035,0.48,8),steel);
+    rod.position.y=0.25;pistonGroup.add(rod);
+    const pistonCap=new THREE.Mesh(new THREE.SphereGeometry(0.085,8,8),copper);
+    pistonCap.position.y=0.5;pistonGroup.add(pistonCap);
+    const pipe=new THREE.Mesh(new THREE.TorusGeometry(0.22,0.045,8,16,Math.PI),copper);
+    pipe.rotation.z=Math.PI/2;pipe.position.set(0.12,0.95,-0.35);g.add(pipe);
+    const stripe=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.07,0.025),warning);
+    stripe.position.set(0.48,0.35,0.46);g.add(stripe);
+    const lights=[];
+    for(let j=0;j<3;j++){
+      const lm=new THREE.MeshStandardMaterial({color:0x333333,emissive:0x000000});
+      const l=new THREE.Mesh(new THREE.SphereGeometry(0.075,10,8),lm);
+      l.position.set(0.27+j*0.19,0.91,0.37);g.add(l);lights.push(lm);
+    }
+    const barMat=new THREE.MeshBasicMaterial({color:0x66ff88});
+    const bar=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.42,0.035),barMat);
+    bar.position.set(0.78,0.72,0.25);bar.scale.y=0.01;g.add(bar);
+
+    // Extra DBD-inspired mechanical detail: fuel canister, flywheel, cable runs and bolts.
+    const tankMat=new THREE.MeshStandardMaterial({color:0x8f2922,roughness:0.62,metalness:0.35});
+    const fuelTank=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.18,0.42,12),tankMat);
+    fuelTank.rotation.z=Math.PI/2;fuelTank.position.set(0.12,1.08,-0.34);fuelTank.castShadow=true;g.add(fuelTank);
+    const tankCap=new THREE.Mesh(new THREE.CylinderGeometry(0.065,0.065,0.07,10),steel);
+    tankCap.position.set(0.12,1.29,-0.34);g.add(tankCap);
+    const flywheelPivot=new THREE.Group();flywheelPivot.position.set(-0.22,0.48,-0.56);g.add(flywheelPivot);
+    const flywheel=new THREE.Mesh(new THREE.TorusGeometry(0.22,0.035,8,20),steel);
+    flywheel.rotation.x=Math.PI/2;flywheel.castShadow=true;flywheelPivot.add(flywheel);
+    const flyHub=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.075,0.12,10),copper);
+    flyHub.rotation.x=Math.PI/2;flywheelPivot.add(flyHub);
+    for(let j=0;j<6;j++){
+      const bolt=new THREE.Mesh(new THREE.SphereGeometry(0.035,8,6),steel);
+      const a=j*Math.PI/3;bolt.position.set(0.22*Math.cos(a),0.22*Math.sin(a),0.015);flywheelPivot.add(bolt);
+    }
+    const cableMat=new THREE.MeshStandardMaterial({color:0x24282b,roughness:0.85});
+    const cable=new THREE.Mesh(new THREE.TorusGeometry(0.19,0.025,6,18,Math.PI*1.35),cableMat);
+    cable.rotation.set(Math.PI/2,0,0);cable.position.set(0.48,0.28,-0.35);g.add(cable);
+    const guard=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.62,0.72),darkMetal);
+    guard.position.set(-0.78,0.5,0);guard.castShadow=true;g.add(guard);
+    for(const sx of [-0.78,0.78]) for(const sz of [-0.43,0.43]){
+      const bolt=new THREE.Mesh(new THREE.SphereGeometry(0.045,8,6),steel);
+      bolt.position.set(sx,0.29,sz);g.add(bolt);
+    }
+    const leverPivot=new THREE.Group();leverPivot.position.set(0.63,0.82,-0.28);g.add(leverPivot);
+    const lever=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.035,0.38,8),copper);
+    lever.position.y=0.18;lever.rotation.z=-0.3;leverPivot.add(lever);
+    const leverGrip=new THREE.Mesh(new THREE.SphereGeometry(0.065,8,8),rubber);
+    leverGrip.position.set(0.055,0.36,0);leverPivot.add(leverGrip);
+
+    const pl=new THREE.PointLight(0xffa044,0.25,4);pl.position.set(0.3,1.1,0.6);g.add(pl);
+    g.position.set(PX(gen.x),0,PX(gen.y));scene.add(g);
+    generatorMeshes.push({group:g,gen,lights,bar,pointLight:pl,fanPivot,pistonGroup,needle,coil,flywheelPivot,leverPivot,repairPhase:Math.random()*6});
   }
   const tg = new THREE.Group();
   const boneMat = new THREE.MeshStandardMaterial({color:0x8a7a5a, roughness:0.9});
@@ -926,64 +1050,135 @@ function buildWorld(){
     g.visible = false; scene.add(g); smokeMeshes.push({group:g});
   }
   survivorMesh = makeSurvivorMesh(); scene.add(survivorMesh);
+  firstPersonRepairRig = makeFirstPersonRepairRig(); camera3d.add(firstPersonRepairRig.group);
   killerMesh = makeKillerMesh(); scene.add(killerMesh);
   killerAuraLight = new THREE.PointLight(0xff3333, 0.8, 8); killerAuraLight.position.y = 1; killerMesh.add(killerAuraLight);
 }
 
 function makeSurvivorMesh(){
-  const g = new THREE.Group();
-  const bodyMat = new THREE.MeshStandardMaterial({color:0x4a7090, roughness:0.7});
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.35, 0.9, 12), bodyMat);
-  body.position.y = 1.0; body.castShadow = true; g.add(body);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 12), new THREE.MeshStandardMaterial({color:0xf0d0b0, roughness:0.6}));
-  head.position.y = 1.65; head.castShadow = true; g.add(head);
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 12, 0, Math.PI*2, 0, Math.PI/2), new THREE.MeshStandardMaterial({color:0x3a2515, roughness:0.9}));
-  hair.position.y = 1.68; g.add(hair);
-  const bp = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.5, 0.25), new THREE.MeshStandardMaterial({color:0x6a4a3a, roughness:0.85}));
-  bp.position.set(0, 1.0, 0.35); bp.castShadow = true; g.add(bp);
-  const lArm = new THREE.Group(); lArm.position.set(-0.35, 1.35, 0);
-  const lAM = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.6, 8), bodyMat); lAM.position.y = -0.3; lAM.castShadow = true; lArm.add(lAM); g.add(lArm);
-  const rArm = new THREE.Group(); rArm.position.set(0.35, 1.35, 0);
-  const rAM = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.6, 8), bodyMat); rAM.position.y = -0.3; rAM.castShadow = true; rArm.add(rAM); g.add(rArm);
-  const legMat = new THREE.MeshStandardMaterial({color:0x2a3a4a, roughness:0.8});
-  const lLeg = new THREE.Group(); lLeg.position.set(-0.15, 0.55, 0);
-  const lLM = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.55, 8), legMat); lLM.position.y = -0.275; lLM.castShadow = true; lLeg.add(lLM); g.add(lLeg);
-  const rLeg = new THREE.Group(); rLeg.position.set(0.15, 0.55, 0);
-  const rLM = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.55, 8), legMat); rLM.position.y = -0.275; rLM.castShadow = true; rLeg.add(rLM); g.add(rLeg);
-  const ringGeo = new THREE.RingGeometry(0.4, 0.5, 16); ringGeo.rotateX(-Math.PI/2);
-  const ringMat = new THREE.MeshBasicMaterial({color:0x66aaff, transparent:true, opacity:0.6, side:THREE.DoubleSide});
-  const ring = new THREE.Mesh(ringGeo, ringMat); ring.position.y = 0.03; g.add(ring);
-  g.userData = {lArm, rArm, lLeg, rLeg, body, head, ringMat};
+  const g=new THREE.Group();
+  const fabric=new THREE.MeshStandardMaterial({color:0x425d70,roughness:0.94});
+  const dark=new THREE.MeshStandardMaterial({color:0x202c35,roughness:0.98});
+  const denim=new THREE.MeshStandardMaterial({color:0x263746,roughness:0.92});
+  const skin=new THREE.MeshStandardMaterial({color:0xb98c70,roughness:0.86});
+  const leather=new THREE.MeshStandardMaterial({color:0x30251f,roughness:0.92});
+  const metal=new THREE.MeshStandardMaterial({color:0x77838a,metalness:0.55,roughness:0.48});
+  const bodyPivot=new THREE.Group();bodyPivot.position.y=1;g.add(bodyPivot);
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.31,0.37,0.92,12),fabric);body.position.y=0.02;body.castShadow=true;bodyPivot.add(body);
+  const vest=new THREE.Mesh(new THREE.BoxGeometry(0.48,0.55,0.31),dark);vest.position.set(0,0.02,0.19);bodyPivot.add(vest);
+  for(const side of [-1,1]){
+    const strap=new THREE.Mesh(new THREE.BoxGeometry(0.055,0.62,0.07),leather);strap.position.set(side*0.17,0.02,0.22);strap.rotation.z=side*0.12;bodyPivot.add(strap);
+    const pocket=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.16,0.035),dark);pocket.position.set(side*0.13,-0.12,0.36);bodyPivot.add(pocket);
+  }
+  const neck=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.11,0.18,10),skin);neck.position.y=0.56;bodyPivot.add(neck);
+  const headPivot=new THREE.Group();headPivot.position.set(0,1.67,0);g.add(headPivot);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.22,14,12),skin);head.castShadow=true;headPivot.add(head);
+  const hairMat=new THREE.MeshStandardMaterial({color:0x241b17,roughness:1});
+  const hair=new THREE.Mesh(new THREE.SphereGeometry(0.235,12,8,0,Math.PI*2,0,Math.PI*0.62),hairMat);hair.position.y=0.055;headPivot.add(hair);
+  const fringe=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.09,0.22),hairMat);fringe.position.set(0,0.12,0.15);headPivot.add(fringe);
+  const nose=new THREE.Mesh(new THREE.SphereGeometry(0.035,7,7),skin);nose.position.set(0,-0.025,0.205);headPivot.add(nose);
+  function arm(side){
+    const upper=new THREE.Group();upper.position.set(side*0.36,1.35,0);g.add(upper);
+    const shoulder=new THREE.Mesh(new THREE.SphereGeometry(0.13,10,8),dark);shoulder.position.y=-0.015;upper.add(shoulder);
+    const sleeve=new THREE.Mesh(new THREE.CylinderGeometry(0.105,0.12,0.38,10),fabric);sleeve.position.y=-0.18;upper.add(sleeve);
+    const elbow=new THREE.Group();elbow.position.y=-0.36;upper.add(elbow);
+    const forearm=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.095,0.34,10),fabric);forearm.position.y=-0.16;elbow.add(forearm);
+    const hand=new THREE.Group();hand.position.set(0,-0.35,0.02);elbow.add(hand);
+    const palm=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.12,0.12),dark);hand.add(palm);
+    for(let i=0;i<4;i++){const finger=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.02,0.085,6),dark);finger.position.set(-0.045+i*0.03,-0.105,0.025);hand.add(finger);}
+    const tool=new THREE.Group();const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.022,0.026,0.3,8),leather);grip.position.set(0,-0.02,0.12);grip.rotation.x=Math.PI/2;tool.add(grip);
+    const headTool=new THREE.Mesh(new THREE.TorusGeometry(0.075,0.018,6,12,Math.PI*1.35),metal);headTool.position.set(0,0.12,0.12);headTool.rotation.x=Math.PI/2;tool.add(headTool);hand.add(tool);
+    return{upper,elbow,hand,tool};
+  }
+  function leg(side){
+    const hip=new THREE.Group();hip.position.set(side*0.16,0.58,0);g.add(hip);
+    const thigh=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.115,0.36,10),denim);thigh.position.y=-0.18;hip.add(thigh);
+    const knee=new THREE.Group();knee.position.y=-0.36;hip.add(knee);
+    const cap=new THREE.Mesh(new THREE.SphereGeometry(0.105,8,8),dark);knee.add(cap);
+    const shin=new THREE.Mesh(new THREE.CylinderGeometry(0.085,0.095,0.34,10),denim);shin.position.y=-0.17;knee.add(shin);
+    const boot=new THREE.Mesh(new THREE.BoxGeometry(0.19,0.13,0.3),leather);boot.position.set(0,-0.36,0.075);knee.add(boot);
+    return{hip,knee};
+  }
+  const l=arm(-1),r=arm(1),ll=leg(-1),rr=leg(1);
+  const ringGeo=new THREE.RingGeometry(0.4,0.5,16);ringGeo.rotateX(-Math.PI/2);
+  const ringMat=new THREE.MeshBasicMaterial({color:0x66aaff,transparent:true,opacity:0.6,side:THREE.DoubleSide});
+  const ring=new THREE.Mesh(ringGeo,ringMat);ring.position.y=0.03;g.add(ring);
+  g.userData={lArm:l.upper,rArm:r.upper,lElbow:l.elbow,rElbow:r.elbow,lHand:l.hand,rHand:r.hand,lTool:l.tool,rTool:r.tool,lLeg:ll.hip,rLeg:rr.hip,lKnee:ll.knee,rKnee:rr.knee,body,bodyPivot,head,headPivot,ringMat};
   return g;
 }
 
+function makeFirstPersonRepairRig(){
+  const group=new THREE.Group();
+  group.position.set(0,-0.28,-0.72);
+  const sleeveMat=new THREE.MeshStandardMaterial({color:0x4a7090,roughness:0.82});
+  const gloveMat=new THREE.MeshStandardMaterial({color:0x24282b,roughness:0.9});
+  const metalMat=new THREE.MeshStandardMaterial({color:0x9aa5ad,roughness:0.32,metalness:0.82});
+  function makeArm(side){
+    const upper=new THREE.Group();upper.position.set(side*0.34,0,0);
+    const upperBone=new THREE.Mesh(new THREE.CylinderGeometry(0.085,0.105,0.34,8),sleeveMat);
+    upperBone.position.y=-0.17;upper.add(upperBone);
+    const elbow=new THREE.Group();elbow.position.y=-0.32;upper.add(elbow);
+    const forearm=new THREE.Mesh(new THREE.CylinderGeometry(0.065,0.085,0.32,8),sleeveMat);
+    forearm.position.y=-0.15;elbow.add(forearm);
+    const hand=new THREE.Mesh(new THREE.SphereGeometry(0.08,8,8),gloveMat);
+    hand.position.set(0,-0.31,0.035);elbow.add(hand);
+    const tool=new THREE.Group();
+    const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.022,0.27,8),gloveMat);
+    handle.position.set(0,-0.02,-0.10);handle.rotation.x=Math.PI/2;tool.add(handle);
+    const head=new THREE.Mesh(new THREE.TorusGeometry(0.065,0.016,6,12,Math.PI*1.35),metalMat);
+    head.position.set(0,0.10,-0.10);head.rotation.x=Math.PI/2;tool.add(head);
+    hand.add(tool);
+    group.add(upper);
+    return {upper,elbow,hand,tool};
+  }
+  const left=makeArm(-1),right=makeArm(1);
+  return {group,left,right};
+}
+
 function makeKillerMesh(){
-  const g = new THREE.Group();
-  const bodyMat = new THREE.MeshStandardMaterial({color:0x2a1010, roughness:0.85});
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.4, 1.2, 12), bodyMat);
-  body.position.y = 1.3; body.castShadow = true; g.add(body);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.25, 12, 12), new THREE.MeshStandardMaterial({color:0xf5f0d8, roughness:0.5}));
-  head.position.y = 2.15; head.castShadow = true; g.add(head);
-  const hood = new THREE.Mesh(new THREE.SphereGeometry(0.3, 12, 12, 0, Math.PI*2, 0, Math.PI*0.7), new THREE.MeshStandardMaterial({color:0x1a0a10, roughness:0.9}));
-  hood.position.y = 2.17; g.add(hood);
-  const eyeMat = new THREE.MeshBasicMaterial({color:0xff3030});
-  const e1 = new THREE.Mesh(new THREE.SphereGeometry(0.04, 6, 6), eyeMat); e1.position.set(-0.08, 2.18, 0.22);
-  const e2 = e1.clone(); e2.position.x = 0.08; g.add(e1, e2);
-  const lArm = new THREE.Group(); lArm.position.set(-0.4, 1.7, 0);
-  const lAM = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.7, 8), bodyMat); lAM.position.y = -0.35; lArm.add(lAM); g.add(lArm);
-  const rArm = new THREE.Group(); rArm.position.set(0.4, 1.7, 0);
-  const rAM = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.7, 8), bodyMat); rAM.position.y = -0.35; rArm.add(rAM);
-  const blade = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.8, 0.15), new THREE.MeshStandardMaterial({color:0x9a9aaa, roughness:0.3, metalness:0.9}));
-  blade.position.set(0.05, -0.5, 0.15); blade.rotation.x = 0.3; rArm.add(blade); g.add(rArm);
-  const legMat = new THREE.MeshStandardMaterial({color:0x1a0a0a, roughness:0.9});
-  const lLeg = new THREE.Group(); lLeg.position.set(-0.18, 0.7, 0);
-  const lLM = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.7, 8), legMat); lLM.position.y = -0.35; lLeg.add(lLM); g.add(lLeg);
-  const rLeg = new THREE.Group(); rLeg.position.set(0.18, 0.7, 0);
-  const rLM = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.7, 8), legMat); rLM.position.y = -0.35; rLeg.add(rLM); g.add(rLeg);
-  const ringGeo = new THREE.RingGeometry(0.5, 0.65, 20); ringGeo.rotateX(-Math.PI/2);
-  const ringMat = new THREE.MeshBasicMaterial({color:0xff3333, transparent:true, opacity:0.5, side:THREE.DoubleSide});
-  const ring = new THREE.Mesh(ringGeo, ringMat); ring.position.y = 0.03; g.add(ring);
-  g.userData = {lArm, rArm, lLeg, rLeg, body, ringMat};
+  const g=new THREE.Group();
+  const coat=new THREE.MeshStandardMaterial({color:0x20191a,roughness:0.98});
+  const edge=new THREE.MeshStandardMaterial({color:0x493334,roughness:0.9});
+  const leather=new THREE.MeshStandardMaterial({color:0x171314,roughness:0.92});
+  const maskMat=new THREE.MeshStandardMaterial({color:0xb7b0a0,roughness:0.75});
+  const metal=new THREE.MeshStandardMaterial({color:0x777d82,metalness:0.82,roughness:0.32});
+  const bodyPivot=new THREE.Group();bodyPivot.position.y=1.15;g.add(bodyPivot);
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.43,1.18,12),coat);body.position.y=0.08;body.castShadow=true;bodyPivot.add(body);
+  const apron=new THREE.Mesh(new THREE.BoxGeometry(0.56,0.82,0.12),leather);apron.position.set(0,-0.1,0.29);bodyPivot.add(apron);
+  const panel=new THREE.Mesh(new THREE.BoxGeometry(0.66,0.7,0.08),edge);panel.position.set(0,-0.02,0.22);bodyPivot.add(panel);
+  for(const side of [-1,1]){const strap=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.92,0.08),leather);strap.position.set(side*0.2,0.02,0.25);bodyPivot.add(strap);}
+  const headPivot=new THREE.Group();headPivot.position.set(0,2.17,0);g.add(headPivot);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.245,14,12),maskMat);headPivot.add(head);
+  const hood=new THREE.Mesh(new THREE.SphereGeometry(0.31,14,10,0,Math.PI*2,0,Math.PI*0.72),leather);hood.position.y=0.045;headPivot.add(hood);
+  const mask=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.28,0.08),maskMat);mask.position.set(0,-0.045,0.2);headPivot.add(mask);
+  const eyeMat=new THREE.MeshBasicMaterial({color:0xff2424});
+  for(const x of [-0.075,0.075]){const eye=new THREE.Mesh(new THREE.SphereGeometry(0.035,8,8),eyeMat);eye.position.set(x,0.01,0.25);headPivot.add(eye);}
+  function arm(side,weapon){
+    const upper=new THREE.Group();upper.position.set(side*0.42,1.72,0);g.add(upper);
+    const shoulder=new THREE.Mesh(new THREE.SphereGeometry(0.16,10,8),edge);upper.add(shoulder);
+    const sleeve=new THREE.Mesh(new THREE.CylinderGeometry(0.105,0.12,0.42,10),coat);sleeve.position.y=-0.2;upper.add(sleeve);
+    const elbow=new THREE.Group();elbow.position.y=-0.4;upper.add(elbow);
+    const forearm=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.095,0.36,10),leather);forearm.position.y=-0.17;elbow.add(forearm);
+    const hand=new THREE.Group();hand.position.set(0,-0.39,0.02);elbow.add(hand);
+    const palm=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.13,0.1),leather);hand.add(palm);
+    for(let i=0;i<4;i++){const finger=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.02,0.1,6),leather);finger.position.set(-0.045+i*0.03,-0.1,0.015);hand.add(finger);}
+    let blade=null;if(weapon){blade=new THREE.Group();const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.04,0.25,8),leather);grip.position.y=-0.12;blade.add(grip);const guard=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.045,0.06),metal);guard.position.y=0.02;blade.add(guard);const edgeBlade=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.72,0.045),metal);edgeBlade.position.set(0,0.4,0.015);blade.add(edgeBlade);hand.add(blade);}
+    return{upper,elbow,hand,blade};
+  }
+  function leg(side){
+    const hip=new THREE.Group();hip.position.set(side*0.19,0.72,0);g.add(hip);
+    const thigh=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.13,0.42,10),leather);thigh.position.y=-0.21;hip.add(thigh);
+    const knee=new THREE.Group();knee.position.y=-0.42;hip.add(knee);
+    const pad=new THREE.Mesh(new THREE.SphereGeometry(0.12,8,8),edge);knee.add(pad);
+    const shin=new THREE.Mesh(new THREE.CylinderGeometry(0.095,0.12,0.4,10),leather);shin.position.y=-0.2;knee.add(shin);
+    const boot=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.15,0.34),coat);boot.position.set(0,-0.42,0.07);knee.add(boot);
+    return{hip,knee};
+  }
+  const l=arm(-1,false),r=arm(1,true),ll=leg(-1),rr=leg(1);
+  const ringGeo=new THREE.RingGeometry(0.5,0.65,20);ringGeo.rotateX(-Math.PI/2);
+  const ringMat=new THREE.MeshBasicMaterial({color:0xff3333,transparent:true,opacity:0.5,side:THREE.DoubleSide});
+  const ring=new THREE.Mesh(ringGeo,ringMat);ring.position.y=0.03;g.add(ring);
+  g.userData={lArm:l.upper,rArm:r.upper,lElbow:l.elbow,rElbow:r.elbow,lHand:l.hand,rHand:r.hand,blade:r.blade,lLeg:ll.hip,rLeg:rr.hip,lKnee:ll.knee,rKnee:rr.knee,body,bodyPivot,head,headPivot,ringMat};
   return g;
 }
 
@@ -1130,6 +1325,8 @@ function killerLOSClear(){
 }
 function computeKillerSpeed(){
   let s = CFG.KILLER_SPEED;
+  if(killer.slowTimer>0)s*=0.62;
+  if(killer.blindTimer>0)s*=0.82;
   if (killer.hasFast) s *= 1.15;
   if (killer.hasParanoia && Math.hypot(survivor.x-killer.x, survivor.y-killer.y) < 200) s *= 1.3;
   if (killer.hasInstinct && !lineOfSightFree(killer.x, killer.y, survivor.x, survivor.y)) s *= 1.15;
@@ -1182,7 +1379,7 @@ function tryHitSurvivor(){
   if (distS >= CFG.ATTACK_RANGE || survivor.state === 'vaulting' || survivor.state === 'healing') return false;
   if (survivor.invulnerableTimer > 0 || survivor.hitCooldown > 0) return false;
   k.attackCooldown = CFG.KILLER_ATTACK_COOLDOWN;
-  killer.bloodlust = 0; killer.lastHitTime = game.time;
+  killer.bloodlust = 0; killer.lastHitTime = game.time;survivor.animEvent='hit';survivor.animTimer=0.72;
   if (selectedSurvivor === 'tank' && survivor.health === 'injured' && !survivor.hitOnce) {
     survivor.hitOnce = true; survivor.invulnerableTimer = 3; survivor.speedBoostTimer = 2;
     survivor.invisibleTimer = 2; survivor.hitCooldown = CFG.HIT_COOLDOWN;
@@ -1192,7 +1389,7 @@ function tryHitSurvivor(){
     game.hint = 'Танк выжил!'; game.hintTime = 2.5; return true;
   }
   if (survivor.health === 'healthy') {
-    survivor.health = 'injured'; survivor.hitCooldown = CFG.HIT_COOLDOWN;
+    survivor.health = 'injured'; survivor.animEvent='hit';survivor.animTimer=0.72; survivor.hitCooldown = CFG.HIT_COOLDOWN;
     survivor.speedBoostTimer = 1.5; survivor.invisibleTimer = 1;
     const dx = survivor.x - k.x, dy = survivor.y - k.y, d = Math.hypot(dx, dy);
     if (d > 0) { survivor.x += (dx/d)*80; survivor.y += (dy/d)*80; }
@@ -1221,7 +1418,7 @@ function updateKillerAI(dt){
   if (k.chaseCommitTimer>0) k.chaseCommitTimer-=dt;
   if (k.attackCooldown>0) k.attackCooldown-=dt;
 
-  const losClear = killerLOSClear() && !survivor.invisibleTimer;
+  const losClear = killerLOSClear() && !survivor.invisibleTimer && k.blindTimer<=0;
   const distToS = Math.hypot(survivor.x - k.x, survivor.y - k.y);
   const timeSinceSeen = k.lastSeen ? game.time - k.lastSeenTime : 999;
   if (losClear && survivor.state !== 'vaulting') {
@@ -1445,7 +1642,16 @@ function updateKillerPlayer(dt, input){
     return;
   }
   if (k.state !== 'idle') return;
-
+  if(k.attackLungeTimer>0){
+    const step=CFG.ATTACK_LUNGE_SPEED*dt;
+    k.x+=k.attackLungeDirX*step;k.y+=k.attackLungeDirY*step;
+    for(const w of walls)if(circleRect(k.x,k.y,k.radius,w.x,w.y,w.w,w.h))resolveCircleRect(k,w);
+    for(const p of pallets)if((p.state==='dropped'||p.state==='breaking')&&circleRotRect(k.x,k.y,k.radius,p.x,p.y,CFG.PALLET_LEN,CFG.PALLET_THICK,p.angle))resolveCircleRotRect(k,p.x,p.y,CFG.PALLET_LEN,CFG.PALLET_THICK,p.angle);
+    k.x=Math.max(k.radius+20,Math.min(2380-k.radius,k.x));k.y=Math.max(k.radius+20,Math.min(1580-k.radius,k.y));
+    k.attackLungeTimer=Math.max(0,k.attackLungeTimer-dt);
+    if(k.attackLungeTimer<=0){tryHitSurvivor();k.attackChargeTimer=0;}
+    return;
+  }
   const fX = Math.cos(k.facing), fY = Math.sin(k.facing);
   const rX = Math.cos(k.facing + Math.PI/2), rY = Math.sin(k.facing + Math.PI/2);
   let mx=0, my=0;
@@ -1486,19 +1692,25 @@ function updateKillerPlayer(dt, input){
     }
   }
 
-  if (input.attack) {
-    if (k.attackCooldown <= 0 && Math.hypot(survivor.x-k.x, survivor.y-k.y) < CFG.ATTACK_RANGE + 8) {
-      tryHitSurvivor();
-    } else {
-      k.attackCooldown = CFG.KILLER_ATTACK_COOLDOWN;
+  const attackNow=!!input.attack;
+  if(attackNow&&!k.attackHeldPrev&&k.attackCooldown<=0)k.attackChargeTimer=0;
+  if(attackNow&&k.attackCooldown<=0){
+    k.attackChargeTimer+=dt;
+    if(k.attackChargeTimer>=CFG.ATTACK_CHARGE_TIME&&k.attackLungeTimer<=0){
+      k.attackLungeTimer=CFG.ATTACK_LUNGE_TIME;k.attackLungeDirX=Math.cos(k.facing);k.attackLungeDirY=Math.sin(k.facing);
+      k.attackAnimTimer=0.5;k.attackAnimType='lunge';k.animEvent='attack';k.animTimer=0.5;k.attackCooldown=CFG.KILLER_ATTACK_COOLDOWN;
     }
   }
-
+  if(!attackNow&&k.attackHeldPrev&&k.attackCooldown<=0&&k.attackLungeTimer<=0){
+    k.attackAnimTimer=0.34;k.attackAnimType='swing';k.animEvent='attack';k.animTimer=0.34;tryHitSurvivor();k.attackCooldown=CFG.KILLER_ATTACK_COOLDOWN;
+  }
+  k.attackHeldPrev=attackNow;
+  if(!attackNow&&k.attackLungeTimer<=0)k.attackChargeTimer=0;
   if (input.space && !input._prevSpace) killerUseAbility();
 }
 
 function updateSurvivorInput(dt, input){
-  const s=survivor;
+  const s=survivor;s.isMoving=false;
   if (s.vaultCooldown>0) s.vaultCooldown-=dt;
   if (s.abilityCooldown>0) s.abilityCooldown-=dt;
   if (s.itemCooldown>0&&s.itemCooldown<100) s.itemCooldown-=dt;
@@ -1533,7 +1745,7 @@ function updateSurvivorInput(dt, input){
   if (input.a) { mx-=rX; my-=rY; }
   if (input.d) { mx+=rX; my+=rY; }
   const len=Math.hypot(mx,my);
-  if (len>0){
+  if (len>0){s.isMoving=true;
     mx/=len; my/=len; s.walkPhase+=dt*12;
     let speed=CFG.SURVIVOR_SPEED;
     if (selectedSurvivor==='athlete') speed*=1.18;
@@ -1559,7 +1771,7 @@ function collideSurvivor(s){
 }
 
 function updateSurvivorAI(dt){
-  const s = survivor;
+  const s = survivor;s.isMoving=false;
   if (s.vaultCooldown>0) s.vaultCooldown-=dt;
   if (s.abilityCooldown>0) s.abilityCooldown-=dt;
   if (s.speedBoostTimer>0) s.speedBoostTimer-=dt;
@@ -1609,7 +1821,7 @@ function updateSurvivorAI(dt){
     if (s.speedBoostTimer > 0) speed *= 1.7;
     if (s.slowTimer > 0) speed *= 0.7;
     const step = speed * dt;
-    s.walkPhase += dt * 12;
+    s.isMoving=true;s.walkPhase += dt * 12;
     s.x += moveX * step; collideSurvivor(s);
     s.y += moveY * step; collideSurvivor(s);
     s.x = Math.max(s.radius+20, Math.min(2380-s.radius, s.x));
@@ -1653,7 +1865,7 @@ function updateSurvivorAI(dt){
     let speed = CFG.SURVIVOR_SPEED;
     if (s.health === 'injured') speed *= CFG.INJURED_SPEED_MULT;
     const step = speed * dt;
-    s.walkPhase += dt * 12;
+    s.isMoving=true;s.walkPhase += dt * 12;
     s.x += moveX * step; collideSurvivor(s);
     s.y += moveY * step; collideSurvivor(s);
   }
@@ -1702,7 +1914,7 @@ function updateHatchets(dt){
   }
 }
 function updateBloodTrail(dt){
-  const moving = survivor.walkPhase > 0 && survivor.state === 'idle';
+  const moving = survivor.health==='injured' && survivor.isMoving && survivor.state === 'idle';
   survivor.trailTimer=(survivor.trailTimer||0)+dt;
   if (moving&&survivor.noTrailTimer<=0&&survivor.invisibleTimer<=0&&survivor.trailTimer>CFG.BLOOD_TRAIL_INTERVAL){
     bloodTrail.push({x:survivor.x,y:survivor.y,time:game.time});
@@ -1768,7 +1980,7 @@ function tryInteractSingle(){
 }
 function dropPallet(p){
   if (p.state!=='upright') return;
-  p.state='falling'; p.fallTimer=0;
+  p.state='falling'; p.fallTimer=0;survivor.animEvent='pallet_drop';survivor.animTimer=0.55;
   const s=survivor,k=killer;
   const px=Math.cos(p.angle+Math.PI/2),py=Math.sin(p.angle+Math.PI/2);
   const sS=(s.x-p.x)*px+(s.y-p.y)*py;
@@ -1785,7 +1997,7 @@ function dropPallet(p){
 }
 function stunKiller(){
   let stunDur=CFG.STUN_TIME; if(killer.hasRelentless) stunDur*=0.5;
-  killer.state='stunned'; killer.stunTimer=stunDur; killer.path=null;
+  killer.state='stunned'; killer.stunTimer=stunDur; killer.path=null;killer.animEvent='stun';killer.animTimer=stunDur;killer.attackLungeTimer=0;killer.attackChargeTimer=0;killer.attackAnimTimer=0;killer.attackHeldPrev=false;
   if (killer.hasRage) killer.rageTimer=4;
   screenShake=14; game.hint='Оглушён!'; game.hintTime=2;
 }
@@ -1812,7 +2024,7 @@ function startVault(entity,targetX,targetY,type,obj){
   let dur=entity===killer?CFG.VAULT_TIME_KILLER:CFG.VAULT_TIME_SURVIVOR;
   if (entity===killer&&killer.hasSwift) dur/=2;
   if (entity===survivor&&selectedSurvivor==='vaultmaster') dur/=1.7;
-  entity.state='vaulting'; entity.vaultTimer=0; entity.vaultDuration=dur;
+  entity.state='vaulting'; entity.vaultTimer=0; entity.vaultDuration=dur;entity.animEvent='vault';entity.animTimer=dur;
   entity.vaultFrom={x:fromX,y:fromY}; entity.vaultTo={x:toX,y:toY};
   entity.facing=Math.atan2(toY-fromY,toX-fromX);
   if (type==='window'&&entity===survivor){
@@ -1850,19 +2062,25 @@ function tryAbility(){
     else {game.hint='Далеко';game.hintTime=1.5;}
   }
 }
+function updateFlashlight(dt,held){
+  const light=camera3d&&camera3d.userData.flashlightLight;
+  const stop=()=>{survivor.flashlightActive=false;if(light)light.intensity=0;};
+  if(selectedItem!=='flashlight'||!held||survivor.itemCooldown>0||survivor.state!=='idle'||survivor.repairing){survivor.flashlightCharge=0;stop();return;}
+  const dx=killer.x-survivor.x,dy=killer.y-survivor.y,dist=Math.hypot(dx,dy),angle=Math.atan2(dy,dx);
+  let da=angle-survivor.facing;while(da>Math.PI)da-=Math.PI*2;while(da<-Math.PI)da+=Math.PI*2;
+  const face=Math.atan2(survivor.y-killer.y,survivor.x-killer.x);let fd=face-killer.facing;while(fd>Math.PI)fd-=Math.PI*2;while(fd<-Math.PI)fd+=Math.PI*2;
+  const aimed=dist<=CFG.FLASHLIGHT_RANGE&&Math.abs(da)<=CFG.FLASHLIGHT_ANGLE&&Math.abs(fd)<=0.9&&lineOfSightFree(survivor.x,survivor.y,killer.x,killer.y);
+  if(!aimed){survivor.flashlightCharge=0;stop();game.hint='Направь свет на лицо убийцы';game.hintTime=0.2;return;}
+  survivor.flashlightActive=true;survivor.flashlightCharge=Math.min(3,survivor.flashlightCharge+dt);if(light)light.intensity=1.8;
+  game.hint='Фонарик: '+survivor.flashlightCharge.toFixed(1)+' / 3.0 с';game.hintTime=0.2;
+  if(survivor.flashlightCharge>=3){killer.blindTimer=CFG.FLASHLIGHT_BLIND_TIME;killer.slowTimer=CFG.FLASHLIGHT_SLOW_TIME;killer.path=null;killer.cautiousTimer=CFG.CAUTIOUS_TIME;survivor.itemCooldown=ITEMS.flashlight.cooldown;survivor.flashlightCharge=0;stop();screenShake=10;game.hint='Убийца ослеплён!';game.hintTime=2;}
+}
+
 function tryUseItem(){
   if (selectedItem==='none'||survivor.itemCooldown>0||survivor.state==='healing'||survivor.repairing) return;
   const item=ITEMS[selectedItem]; if(!item.active) return;
   if (selectedItem==='flashlight'){
-    const dx=killer.x-survivor.x,dy=killer.y-survivor.y,dist=Math.hypot(dx,dy);
-    if (dist>CFG.FLASHLIGHT_RANGE){game.hint='Далеко';game.hintTime=1;return;}
-    if (!lineOfSightFree(survivor.x,survivor.y,killer.x,killer.y)){game.hint='За стеной';game.hintTime=1;return;}
-    const a=Math.atan2(dy,dx); let da=a-survivor.facing;
-    while(da>Math.PI)da-=Math.PI*2; while(da<-Math.PI)da+=Math.PI*2;
-    if (Math.abs(da)>CFG.FLASHLIGHT_ANGLE){game.hint='Направь';game.hintTime=1;return;}
-    survivor.itemCooldown=item.cooldown;
-    killer.state='blinded'; killer.stunTimer=1.5; killer.path=null; killer.cautiousTimer=CFG.CAUTIOUS_TIME;
-    game.hint='Ослепил!'; game.hintTime=2; screenShake=10;
+    survivor.flashlightCharge=0;game.hint='Удерживай F и направляй свет на лицо убийцы';game.hintTime=2;
   } else if (selectedItem==='medkit'){
     if (survivor.health==='healthy'){game.hint='Не ранен';game.hintTime=1;return;}
     survivor.state='healing'; survivor.healTimer=CFG.HEAL_TIME; survivor.itemCooldown=9999;
@@ -1950,29 +2168,84 @@ function sync3D(dt){
   const myIsSurvivor = playerRole === 'survivor';
   survivorMesh.visible = !myIsSurvivor;
   killerMesh.visible = true;
+  if(firstPersonRepairRig){
+    const showHands=myIsSurvivor&&survivor.state==='idle'&&!!(survivor.repairing&&survivor.repairing.type==='gen');
+    firstPersonRepairRig.group.visible=showHands;
+    if(showHands){
+      const cycle=performance.now()/1000*8.4;
+      const pulse=Math.max(0,Math.sin(cycle*2));
+      const {left,right}=firstPersonRepairRig;
+      left.upper.rotation.x=1.02+Math.sin(cycle)*0.08;
+      right.upper.rotation.x=0.94+Math.sin(cycle+0.8)*0.16;
+      left.upper.rotation.z=-0.12+Math.sin(cycle)*0.025;
+      right.upper.rotation.z=0.12+Math.sin(cycle)*0.035;
+      left.elbow.rotation.x=0.55+pulse*0.18;
+      right.elbow.rotation.x=0.62-pulse*0.22;
+      left.hand.rotation.x=0.12+Math.sin(cycle*2)*0.08;
+      right.hand.rotation.x=-0.18-Math.sin(cycle*2+0.5)*0.12;
+      right.tool.rotation.z=Math.sin(cycle*2)*0.22;
+    }
+  }
 
   if (survivorMesh.visible) {
     survivorMesh.position.set(PX(survivor.x), 0, PX(survivor.y));
     survivorMesh.rotation.y = -survivor.facing + Math.PI/2;
-    const moving = survivor.walkPhase > 0 && survivor.state === 'idle';
+    const moving = survivor.isMoving && survivor.state === 'idle';
     const swing = Math.sin(survivor.walkPhase) * 0.6;
     const u = survivorMesh.userData;
-    if (u.lArm) u.lArm.rotation.x = swing;
-    if (u.rArm) u.rArm.rotation.x = -swing;
-    if (u.lLeg) u.lLeg.rotation.x = -swing;
-    if (u.rLeg) u.rLeg.rotation.x = swing;
+    const repairing=!!(survivor.repairing&&survivor.repairing.type==='gen');
+    const repairClock=performance.now()/1000;
+    const repairCycle=repairClock*8.4;
+    const beat=Math.sin(repairCycle);
+    const workPulse=Math.max(0,Math.sin(repairCycle*2.0));
+    if(u.lArm)u.lArm.rotation.x=repairing?-1.02+beat*0.10:swing;
+    if(u.rArm)u.rArm.rotation.x=repairing?-0.92+Math.sin(repairCycle+0.8)*0.24:-swing;
+    if(u.lArm)u.lArm.rotation.z=repairing?-0.18+beat*0.035:0;
+    if(u.rArm)u.rArm.rotation.z=repairing?0.16+beat*0.045:0;
+    if(u.lElbow)u.lElbow.rotation.x=repairing?-0.92+workPulse*0.28:0.08;
+    if(u.rElbow)u.rElbow.rotation.x=repairing?-1.08-workPulse*0.34:0.08;
+    if(u.lElbow)u.lElbow.rotation.z=repairing?-0.08:0;
+    if(u.rElbow)u.rElbow.rotation.z=repairing?0.10:0;
+    if(u.lHand)u.lHand.rotation.x=repairing?0.16+Math.sin(repairCycle*2.0)*0.12:0;
+    if(u.rHand)u.rHand.rotation.x=repairing?-0.24-Math.sin(repairCycle*2.0+0.5)*0.16:0;
+    if(u.lHand)u.lHand.rotation.z=repairing?Math.sin(repairCycle)*0.08:0;
+    if(u.rHand)u.rHand.rotation.z=repairing?-Math.sin(repairCycle)*0.12:0;
+    if(u.rTool){u.rTool.rotation.z=repairing?Math.sin(repairCycle*2.0)*0.24:0;u.rTool.rotation.y=repairing?0.12+workPulse*0.16:0;}
+    if(u.lLeg)u.lLeg.rotation.x=repairing?0.04:-swing;
+    if(u.rLeg)u.rLeg.rotation.x=repairing?-0.04:swing;
+    if(u.lKnee)u.lKnee.rotation.x=moving?Math.max(0,-swing)*0.45:(survivor.health==='injured'?0.12:0);
+    if(u.rKnee)u.rKnee.rotation.x=moving?Math.max(0,swing)*0.45:(survivor.health==='injured'?0.1:0);
+    if(repairing&&u.body){u.body.rotation.x=-0.16+Math.sin(repairCycle)*0.025;u.body.rotation.z=Math.sin(repairCycle)*0.025;}
+    else if(u.body){u.body.rotation.x*=0.82;u.body.rotation.z*=0.82;}
     if (u.body) u.body.position.y = 1.0 + (moving ? Math.abs(Math.sin(survivor.walkPhase*2))*0.05 : 0);
     if (u.head) u.head.position.y = 1.65 + (moving ? Math.abs(Math.sin(survivor.walkPhase*2))*0.05 : 0);
     if (u.ringMat){
       u.ringMat.color.setHex(survivor.health==='injured'?0xff3333:0x66aaff);
       u.ringMat.opacity = survivor.invisibleTimer>0?0.2:0.6;
     }
-    if (survivor.state === 'vaulting') {
-      const t = survivor.vaultTimer / survivor.vaultDuration;
-      survivorMesh.position.y = Math.sin(t * Math.PI) * 1.2;
-      survivorMesh.rotation.x = Math.sin(t * Math.PI) * 0.5;
-    } else {
-      survivorMesh.rotation.x = 0;
+    if(survivor.state==='vaulting'){
+      const t=survivor.vaultTimer/survivor.vaultDuration,arc=Math.sin(t*Math.PI);
+      survivorMesh.position.y=arc*1.2;survivorMesh.rotation.x=arc*0.48;
+      if(u.lArm)u.lArm.rotation.x=-1.55+arc*0.55;if(u.rArm)u.rArm.rotation.x=-1.7+arc*0.6;
+      if(u.lElbow)u.lElbow.rotation.x=-0.8;if(u.rElbow)u.rElbow.rotation.x=-0.9;
+      if(u.lKnee)u.lKnee.rotation.x=0.95*arc;if(u.rKnee)u.rKnee.rotation.x=0.7*arc;
+    }else if(survivor.animTimer>0&&survivor.animEvent==='hit'){
+      const t=survivor.animTimer/0.72,flinch=Math.sin((1-t)*Math.PI*2)*(1-t);
+      survivorMesh.rotation.x=-0.28*(1-t);survivorMesh.rotation.z=flinch*0.22;
+      if(u.bodyPivot)u.bodyPivot.rotation.x=-0.25*(1-t);
+      if(u.lArm)u.lArm.rotation.x=-1.6+flinch*0.3;if(u.rArm)u.rArm.rotation.x=-1.45-flinch*0.25;
+      if(u.lKnee)u.lKnee.rotation.x=0.35*(1-t);if(u.rKnee)u.rKnee.rotation.x=0.45*(1-t);
+    }else if(survivor.animTimer>0&&survivor.animEvent==='pallet_drop'){
+      const p=1-survivor.animTimer/0.55;
+      survivorMesh.rotation.x=-0.18*Math.sin(p*Math.PI);
+      if(u.lArm)u.lArm.rotation.x=-1.8+Math.sin(p*Math.PI)*0.35;if(u.rArm)u.rArm.rotation.x=-1.8+Math.sin(p*Math.PI)*0.35;
+      if(u.lElbow)u.lElbow.rotation.x=-0.35;if(u.rElbow)u.rElbow.rotation.x=-0.35;
+      if(u.lKnee)u.lKnee.rotation.x=0.18;if(u.rKnee)u.rKnee.rotation.x=0.18;
+    }else{
+      survivorMesh.rotation.x=0;survivorMesh.rotation.z*=0.82;
+      if(u.bodyPivot){u.bodyPivot.rotation.x*=0.82;u.bodyPivot.rotation.z*=0.82;}
+      if(u.headPivot)u.headPivot.rotation.z*=0.82;
+      if(survivor.health==='injured'&&moving){survivorMesh.rotation.z=0.035*Math.sin(survivor.walkPhase*0.5);if(u.headPivot)u.headPivot.rotation.z=0.04;}
     }
   }
 
@@ -1982,17 +2255,41 @@ function sync3D(dt){
   const ku = killerMesh.userData;
   if (ku.lArm) ku.lArm.rotation.x = kSwing;
   if (ku.rArm) ku.rArm.rotation.x = -kSwing;
+  if (ku.lElbow) ku.lElbow.rotation.x = killer.walkPhase>0?0.12:0;
+  if (ku.rElbow) ku.rElbow.rotation.x = killer.walkPhase>0?0.12:0;
   if (ku.lLeg) ku.lLeg.rotation.x = -kSwing;
   if (ku.rLeg) ku.rLeg.rotation.x = kSwing;
-  if (killer.state === 'vaulting') {
-    const t = killer.vaultTimer / killer.vaultDuration;
-    killerMesh.position.y = Math.sin(t * Math.PI) * 1.5;
-    killerMesh.rotation.x = Math.sin(t * Math.PI) * 0.5;
-  } else if (killer.state === 'breaking') {
-    killerMesh.userData.body.rotation.z = Math.sin(performance.now()/80) * 0.15;
-  } else {
-    killerMesh.rotation.x = 0;
-    if (ku.body) ku.body.rotation.z *= 0.9;
+  if (ku.lKnee) ku.lKnee.rotation.x = Math.max(0,-kSwing)*0.35;
+  if (ku.rKnee) ku.rKnee.rotation.x = Math.max(0,kSwing)*0.35;
+  if(killer.state==='vaulting'){
+    const t=killer.vaultTimer/killer.vaultDuration,arc=Math.sin(t*Math.PI);
+    killerMesh.position.y=arc*1.35;killerMesh.rotation.x=arc*0.42;
+    if(ku.lArm)ku.lArm.rotation.x=-1.45+arc*0.5;if(ku.rArm)ku.rArm.rotation.x=-1.65+arc*0.45;
+    if(ku.lElbow)ku.lElbow.rotation.x=-0.75;if(ku.rElbow)ku.rElbow.rotation.x=-0.85;
+    if(ku.lKnee)ku.lKnee.rotation.x=0.9*arc;if(ku.rKnee)ku.rKnee.rotation.x=0.65*arc;
+  }else if(killer.state==='breaking'){
+    const phase=performance.now()/1000*8;
+    if(ku.body)ku.body.rotation.z=0.12+Math.sin(phase)*0.08;
+    if(ku.lArm)ku.lArm.rotation.x=-0.95+Math.sin(phase)*0.22;
+    if(ku.rArm)ku.rArm.rotation.x=-1.25+Math.max(0,Math.sin(phase))*0.28;
+    if(ku.rElbow)ku.rElbow.rotation.x=-0.7-Math.max(0,Math.sin(phase))*0.45;
+    if(ku.lKnee)ku.lKnee.rotation.x=0.18;
+  }else if(killer.state==='stunned'){
+    const phase=performance.now()/1000*13;
+    killerMesh.rotation.x=0.12+Math.sin(phase)*0.035;
+    if(ku.body)ku.body.rotation.z=Math.sin(phase)*0.09;
+    if(ku.headPivot){ku.headPivot.rotation.z=Math.sin(phase*0.6)*0.18;ku.headPivot.rotation.x=-0.22;}
+    if(ku.lArm)ku.lArm.rotation.x=-1.45+Math.sin(phase)*0.18;
+    if(ku.rArm)ku.rArm.rotation.x=-1.25-Math.sin(phase)*0.2;
+    if(ku.lKnee)ku.lKnee.rotation.x=0.28;if(ku.rKnee)ku.rKnee.rotation.x=0.35;
+  }else if(killer.attackAnimTimer>0){
+    const p=1-killer.attackAnimTimer/0.5,sw=Math.sin(Math.min(1,p)*Math.PI);
+    if(ku.rArm)ku.rArm.rotation.x=-1.7+sw*1.6;
+    if(ku.rElbow)ku.rElbow.rotation.x=-0.9+sw*0.5;
+    if(ku.body)ku.body.rotation.z=-0.1+sw*0.2;
+  }else{
+    killerMesh.rotation.x=0;if(ku.body)ku.body.rotation.z*=0.9;
+    if(ku.headPivot)ku.headPivot.rotation.x*=0.8;
   }
   if (killerAuraLight){
     killerAuraLight.color.setHex(killer.state==='stunned'?0xffdd44:(killer.bloodlust>0?0xff8800:0xff3333));
@@ -2015,6 +2312,14 @@ function sync3D(dt){
 
   for (const gm of generatorMeshes){
     const g = gm.gen, pct = g.progress;
+    const activeRepair=!!(survivor.repairing&&survivor.repairing.type==='gen'&&survivor.repairing.ref===g);
+    const animT=performance.now()/1000+gm.repairPhase;
+    gm.fanPivot.rotation.z+=(g.done?0.035:(activeRepair?0.18:0.055))*(1+pct*1.5);
+    gm.pistonGroup.position.y=0.55+Math.sin(animT*(activeRepair?13:4))*(activeRepair?0.075:0.025);
+    if(gm.flywheelPivot)gm.flywheelPivot.rotation.z+=g.done?0.025:(activeRepair?0.22:0.07);
+    if(gm.leverPivot)gm.leverPivot.rotation.z=activeRepair?Math.sin(animT*8)*0.16:Math.sin(animT*2)*0.025;
+    gm.needle.rotation.z=-0.45+pct*0.8+Math.sin(animT*2)*0.04;
+    gm.coil.material.emissive.setHex(activeRepair?0x3a1608:0x000000);
     for (let i=0;i<3;i++){
       const active = g.done || pct > (i+1)/3;
       gm.lights[i].color.setHex(active ? (g.done?0x66ff88:0xffaa44) : 0x333333);
@@ -2112,7 +2417,8 @@ function updateHUD(){
     let s=killer.state.toUpperCase();
     if (killer.state==='idle') s='ПАТРУЛЬ';
     else if (killer.state==='stunned') s='ОГЛУШЁН';
-    else if (killer.state==='blinded') s='ОСЛЕПЛЁН';
+    else if (killer.state==='blinded'||killer.blindTimer>0) s='ОСЛЕПЛЁН';
+    else if (killer.slowTimer>0) s='ЗАМЕДЛЕН';
     else if (killer.state==='breaking') s='ЛОМАЕТ';
     else if (killer.state==='dashing') s='РЫВОК';
     else if (killer.state==='chainsaw_dash') s='ПИЛА';
@@ -2129,6 +2435,10 @@ function updateHUD(){
   }
 
   crosshair.classList.toggle('show', game.screen === 'playing' && document.pointerLockElement === canvas);
+  if(camera3d&&camera3d.userData.flashlightLight&&playerRole==='survivor')camera3d.userData.flashlightLight.intensity=survivor.flashlightActive?1.8:0;
+  if(camera3d&&camera3d.userData.flashlightBeam)camera3d.userData.flashlightBeam.visible=playerRole==='survivor'&&survivor.flashlightActive;
+  const blindOverlay=document.getElementById('blind-effect');
+  if(blindOverlay){const active=playerRole==='killer'&&killer.blindTimer>0&&game.screen==='playing';blindOverlay.style.opacity=active?String(Math.min(0.9,0.38+killer.blindTimer/8)):'0';blindOverlay.style.backdropFilter=active?'blur('+Math.min(7,killer.blindTimer*1.6)+'px) grayscale(.7)':'none';}
 
   const ind = document.getElementById('mp-indicator');
   if (MP.active){
@@ -2324,13 +2634,13 @@ function resetGame(){
   survivor.vaultTimer=0; survivor.vaultCooldown=0; survivor.facing=0; survivor.pitch=0; survivor.walkPhase=0;
   survivor.abilityCooldown=0; survivor.speedBoostTimer=0; survivor.vaultBoostTimer=0;
   survivor.invisibleTimer=0; survivor.invulnerableTimer=0;
-  survivor.itemCooldown=0; survivor.itemUsed=false; survivor.hitOnce=false; survivor.slowTimer=0;
-  survivor.health='healthy'; survivor.hitCooldown=0; survivor.healTimer=0; survivor.bloodTimer=0;
+  survivor.itemCooldown=0; survivor.itemUsed=false; survivor.hitOnce=false; survivor.slowTimer=0;survivor.flashlightCharge=0;survivor.flashlightActive=false;
+  survivor.health='healthy'; survivor.hitCooldown=0; survivor.healTimer=0; survivor.bloodTimer=0;survivor.animEvent='idle';survivor.animTimer=0;survivor.isMoving=false;
   survivor.noTrailTimer=0; survivor.litheTimer=0; survivor.trailTimer=0;
   survivor.repairing=null; survivor.repairTimer=0; survivor.isInChase=false; survivor.vx=0; survivor.vy=0;
 
   killer.x=2250; killer.y=1450; killer.state='idle';
-  killer.stunTimer=0; killer.breakTimer=0; killer.breakTarget=null; killer.attackCooldown=0;
+  killer.stunTimer=0; killer.breakTimer=0; killer.breakTarget=null; killer.attackCooldown=0;killer.blindTimer=0;killer.slowTimer=0;killer.attackHeldPrev=false;killer.attackChargeTimer=0;killer.attackLungeTimer=0;killer.attackAnimTimer=0;killer.attackAnimType='';killer.animEvent='idle';killer.animTimer=0;
   killer.vaultTimer=0; killer.facing=Math.PI; killer.pitch=0; killer.walkPhase=0;
   killer.path=null; killer.pathTimer=0; killer.stuckTimer=0; killer.palletStuckTimer=0;
   killer.dashCooldown=0; killer.dashWindupTimer=0; killer.dashTimer=0;
@@ -2351,7 +2661,7 @@ function resetGame(){
   screenShake=0; costMap=null;
 
   game.time=0;
-  game.hint = playerRole === 'survivor' ? 'Починить 5 генераторов и сбежать!' : 'Найди выжившего и поймай!';
+  game.hint = playerRole === 'survivor' ? 'Починить 3 генератора и сбежать!' : 'Найди выжившего и поймай!';
   game.hintTime=6;
 }
 function beginPlaying(){
@@ -2416,7 +2726,7 @@ function loop(now){
         if (eEdge) tryInteractSingle();
         if (pInput.e) tryInteractHold(pInput);
         if (spaceEdge) tryAbility();
-        if (fEdge) tryUseItem();
+        if(selectedItem==='flashlight')updateFlashlight(dt,pInput.f);else if(fEdge)tryUseItem();
         if (MP.active && MP.role === 'host' && guestInput) {
           updateKillerPlayer(dt, guestInput);
           if (guestInput.space) killerUseAbility();
@@ -2425,12 +2735,11 @@ function loop(now){
         }
       } else {
         updateKillerPlayer(dt, pInput);
-        if (pInput.attack) tryHitSurvivor();
         if (spaceEdge) killerUseAbility();
         if (MP.active && MP.role === 'host' && guestInput) {
           updateSurvivorInput(dt, guestInput);
           if (guestInput.space) tryAbility();
-          if (guestInput.f) tryUseItem();
+          if(selectedItem==='flashlight')updateFlashlight(dt,guestInput.f);else if(guestInput.f)tryUseItem();
           if (guestInput.e) {
             if (!survivor.repairing) tryInteractSingle();
             tryInteractHold(guestInput);
@@ -2440,6 +2749,8 @@ function loop(now){
         }
       }
 
+      killer.blindTimer=Math.max(0,killer.blindTimer-dt);killer.slowTimer=Math.max(0,killer.slowTimer-dt);killer.attackAnimTimer=Math.max(0,killer.attackAnimTimer-dt);
+      survivor.animTimer=Math.max(0,(survivor.animTimer||0)-dt);killer.animTimer=Math.max(0,(killer.animTimer||0)-dt);
       updatePallets(dt); updateWindows(dt); updateSmoke(dt);
       updateTraps(dt); updateHatchets(dt); updateBloodTrail(dt);
       checkWin();
