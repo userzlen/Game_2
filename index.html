@@ -1539,6 +1539,12 @@ function buildCostMap(){
     const gx1=Math.min(GRID_W-1,Math.floor((w.x+w.w-1)/CW)),gy1=Math.min(GRID_H-1,Math.floor((w.y+w.h-1)/CH));
     for(let gy=gy0;gy<=gy1;gy++) for(let gx=gx0;gx<=gx1;gx++) grid[gy*GRID_W+gx]=999;
   }
+  for(const door of exitDoors){
+    if(door.opened)continue;
+    const gx0=Math.max(0,Math.floor(door.x/CW)),gy0=Math.max(0,Math.floor(door.y/CH));
+    const gx1=Math.min(GRID_W-1,Math.floor((door.x+door.w-1)/CW)),gy1=Math.min(GRID_H-1,Math.floor((door.y+door.h-1)/CH));
+    for(let gy=gy0;gy<=gy1;gy++)for(let gx=gx0;gx<=gx1;gx++)grid[gy*GRID_W+gx]=999;
+  }
   for(const win of windows){
     const cost = win.blockedTimer > 0 ? 999 : 8;
     const gx0=Math.max(0,Math.floor(win.x/CW)),gy0=Math.max(0,Math.floor(win.y/CH));
@@ -2253,7 +2259,7 @@ function tryInteractHold(input, dt=1/60){
     return true;
   } else if (near.type==='exit'){
     near.ref.openProgress+=dt/CFG.EXIT_OPEN_TIME;
-    if (near.ref.openProgress>=1){near.ref.opened=true;game.hint='Выход открыт!';game.hintTime=2;}
+    if (near.ref.openProgress>=1){near.ref.openProgress=1;near.ref.opened=true;costMap=null;game.hint='Выход открыт!';game.hintTime=2;}
     return true;
   }
   return false;
