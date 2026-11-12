@@ -2361,7 +2361,7 @@ addEventListener('keydown', e => {
   const k=(e.key||'').toLowerCase(); if(!k) return;
   if (!keys[k]){
     keys[k]=true;
-    if ([' ','arrowup','arrowdown','arrowleft','arrowright','e','r','f'].includes(k)) e.preventDefault();
+    if ([' ','arrowup','arrowdown','arrowleft','arrowright','e','r','f','f2'].includes(k)) e.preventDefault();
     if (game.screen!=='playing') return;
     if (sandboxMode && k==='f2') {
       document.getElementById('sandbox-admin')?.classList.toggle('show');
@@ -2859,6 +2859,7 @@ function showMPJoinScreen(prefillCode){
 window.__menu = async () => {
   if (MP.active) await cleanupMultiplayer(MP.role === 'host');
   sandboxMode = false; sandboxHudVisible = true;
+  document.getElementById('sandbox-admin')?.classList.remove('show');
   document.getElementById('hud').style.display = '';
   document.getElementById('crosshair').style.display = '';
   game.screen = 'menu';
@@ -2950,6 +2951,7 @@ function refreshSandboxAdmin(){
   if(flyState)flyState.textContent=sandboxFlyEnabled?'ВКЛ':'ВЫКЛ';
   if(freeze){freeze.classList.toggle('active',sandboxKillerFrozen);freeze.disabled=!sandboxKillerActive;freeze.style.opacity=sandboxKillerActive?'1':'.45';}
   if(freezeState)freezeState.textContent=!sandboxKillerActive?'НЕТ КИЛЛЕРА':(sandboxKillerFrozen?'ЗАМОРОЖЕН':'АКТИВЕН');
+  if(freeze){const label=freeze.querySelector('span');if(label)label.textContent=sandboxKillerFrozen?'Разморозить киллера':'Заморозить киллера';}
   if(spawn)spawn.classList.toggle('active',sandboxKillerActive);
 }
 function sandboxAdminMessage(message){
