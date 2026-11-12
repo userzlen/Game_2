@@ -2628,6 +2628,9 @@ function showMPJoinScreen(prefillCode){
 
 window.__menu = async () => {
   if (MP.active) await cleanupMultiplayer(MP.role === 'host');
+  sandboxMode = false; sandboxHudVisible = true;
+  document.getElementById('hud').style.display = '';
+  document.getElementById('crosshair').style.display = '';
   game.screen = 'menu';
   showMainMenu();
 };
@@ -2638,7 +2641,7 @@ window.__sandbox = () => {
   document.getElementById('hud').style.display = '';
   document.getElementById('crosshair').style.display = '';
   resetGame();
-  survivor.x = 1200; survivor.y = 800; survivor.facing = 0; survivor.pitch = 0;
+  survivor.x = 150; survivor.y = 150; survivor.facing = 0; survivor.pitch = 0;
   killer.x = -5000; killer.y = -5000;
   game.screen = 'playing'; game.hint = 'ПЕСОЧНИЦА: исследуй карту. H — скрыть интерфейс, Esc — меню паузы.'; game.hintTime = 10;
   hideScreen(); snapCamera();
