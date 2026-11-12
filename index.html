@@ -2479,7 +2479,7 @@ function sync3D(dt){
   if (ku.rArm) ku.rArm.rotation.x = -kSwing;
   if (ku.lElbow) ku.lElbow.rotation.x = killer.walkPhase>0?0.12:0;
   if (ku.rElbow) ku.rElbow.rotation.x = killer.walkPhase>0?0.12:0;
-  if(ku.spineBone)ku.spineBone.rotation.x=killer.state==='breaking'?-0.14:(killer.isMoving?Math.sin(killer.walkPhase*2)*0.025:0);
+  if(ku.spineBone)ku.spineBone.rotation.x=killer.state==='breaking'?-0.14:Math.sin(killer.walkPhase*2)*0.025;
   if(ku.chestBone)ku.chestBone.rotation.z=killer.state==='stunned'?Math.sin(performance.now()/170)*0.045:0;
   if (ku.lLeg) ku.lLeg.rotation.x = -kSwing;
   if (ku.rLeg) ku.rLeg.rotation.x = kSwing;
