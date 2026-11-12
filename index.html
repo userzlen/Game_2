@@ -980,14 +980,14 @@ function sanitizeDecorLayout(){
 function buildWorld(){
   sanitizeDecorLayout();
   for (const w of walls){
-    const m = new THREE.Mesh(new THREE.BoxGeometry(PX(w.w), 1.85, PX(w.h)), wallMat());
-    m.position.set(PX(w.x + w.w/2), 0.925, PX(w.y + w.h/2));
+    const m = new THREE.Mesh(new THREE.BoxGeometry(PX(w.w), 2.65, PX(w.h)), wallMat());
+    m.position.set(PX(w.x + w.w/2), 1.325, PX(w.y + w.h/2));
     m.castShadow = true; m.receiveShadow = true; scene.add(m);
     const alongX=w.w>=w.h, length=PX(alongX?w.w:w.h), cx=PX(w.x+w.w/2), cz=PX(w.y+w.h/2);
     const trim=woodMat();
     for(const side of [-1,1]){
       const rail=new THREE.Mesh(new THREE.BoxGeometry(alongX?length:0.13,0.13,alongX?0.13:length),trim);
-      rail.position.set(cx,1.72,cz+(alongX?side*0.23:0));if(!alongX)rail.position.set(cx+side*0.23,1.72,cz);
+      rail.position.set(cx,2.52,cz+(alongX?side*0.23:0));if(!alongX)rail.position.set(cx+side*0.23,2.52,cz);
       rail.castShadow=true;scene.add(rail);
       const lower=new THREE.Mesh(new THREE.BoxGeometry(alongX?length:0.10,0.09,alongX?0.10:length),trim);
       lower.position.set(cx,0.12,cz+(alongX?side*0.23:0));if(!alongX)lower.position.set(cx+side*0.23,0.12,cz);
@@ -996,8 +996,8 @@ function buildWorld(){
     const postCount=Math.max(2,Math.floor(length/2.4));
     for(let i=0;i<=postCount;i++){
       const t=postCount?i/postCount:0.5;
-      const post=new THREE.Mesh(new THREE.BoxGeometry(alongX?0.12:0.42,1.83,alongX?0.42:0.12),trim);
-      post.position.set(alongX?cx-length/2+length*t:cx,0.915,alongX?cz:cz-length/2+length*t);
+      const post=new THREE.Mesh(new THREE.BoxGeometry(alongX?0.12:0.42,2.63,alongX?0.42:0.12),trim);
+      post.position.set(alongX?cx-length/2+length*t:cx,1.315,alongX?cz:cz-length/2+length*t);
       post.castShadow=true;post.receiveShadow=true;scene.add(post);
     }
   }
@@ -2232,14 +2232,14 @@ function tryInteractHold(input, dt=1/60){
   const s=survivor;
   if (s.state==='vaulting'||s.state==='healing') return false;
   let near=null;
-  for(const gen of generators){if(gen.done)continue;if(Math.hypot(gen.x-s.x,gen.y-s.y)<CFG.GENERATOR_INTERACT){near={type:'gen',ref:gen};break;}}
-  if (!near&&!totem.broken&&Math.hypot(totem.x-s.x,totem.y-s.y)<CFG.TOTEM_INTERACT) near={type:'totem',ref:totem};
-  if (!near) for(const e of exitDoors){if(e.opened)continue;if(Math.hypot(e.x+e.w/2-s.x,e.y+e.h/2-s.y)<CFG.EXIT_INTERACT&&generators.every(g=>g.done)){near={type:'exit',ref:e};break;}}
+  for(const gen of generators){if(gen.done)continue;if(Math.hypot(gen.x-s.x,gen.y-s.y)<CFG.GENERATOR_INTERACT&&lineOfSightFree(s.x,s.y,gen.x,gen.y)){near={type:'gen',ref:gen};break;}}
+  if (!near&&!totem.broken&&Math.hypot(totem.x-s.x,totem.y-s.y)<CFG.TOTEM_INTERACT&&lineOfSightFree(s.x,s.y,totem.x,totem.y)) near={type:'totem',ref:totem};
+  if (!near) for(const e of exitDoors){if(e.opened)continue;const ex=e.x+e.w/2,ey=e.y+e.h/2;if(Math.hypot(ex-s.x,ey-s.y)<CFG.EXIT_INTERACT&&generators.every(g=>g.done)&&lineOfSightFree(s.x,s.y,ex,ey)){near={type:'exit',ref:e};break;}}
   if (!near){s.repairing=null;s.repairTimer=0;return false;}
   s.repairing=near;
   if (near.type==='gen'){
     let boost=1; if(selectedItem==='toolbox'&&!survivor.itemUsed) boost=1.35;
-    near.ref.progress+=(dt/CFG.GENERATOR_REPAIR_TIME)*boost;
+    near.ref.progress=Math.min(1,near.ref.progress+(dt/CFG.GENERATOR_REPAIR_TIME)*boost);
     if (near.ref.progress>=1){
       near.ref.progress=1; near.ref.done=true; screenShake=4;
       game.hint='Генератор готов!'; game.hintTime=2;
@@ -3036,8 +3036,9 @@ window.__sandboxRestoreMap=()=>{
 };
 window.__sandboxSpawnKiller=()=>{
   if(!sandboxMode)return;
+  pickKillerAbility();
   sandboxKillerActive=true;sandboxKillerFrozen=false;
-  killer.x=2250;killer.y=1450;killer.facing=Math.atan2(survivor.y-killer.y,survivor.x-killer.x);
+  killer.isMoving=false;killer.x=2250;killer.y=1450;killer.facing=Math.atan2(survivor.y-killer.y,survivor.x-killer.x);
   killer.pitch=0;killer.state='idle';killer.stunTimer=0;killer.blindTimer=0;killer.slowTimer=0;
   killer.path=null;killer.pathTimer=0;killer.lastSeen=null;killer.lastSeenTime=-999;
   refreshSandboxAdmin();sandboxAdminMessage('Киллер появился на карте и может преследовать игрока.');
@@ -3045,7 +3046,7 @@ window.__sandboxSpawnKiller=()=>{
 window.__sandboxToggleFreeze=()=>{
   if(!sandboxMode||!sandboxKillerActive)return;
   sandboxKillerFrozen=!sandboxKillerFrozen;
-  if(sandboxKillerFrozen){killer.state='idle';killer.path=null;killer.attackLungeTimer=0;killer.attackChargeTimer=0;killer.attackAnimTimer=0;}
+  if(sandboxKillerFrozen){killer.state='idle';killer.isMoving=false;killer.path=null;killer.attackLungeTimer=0;killer.attackChargeTimer=0;killer.attackAnimTimer=0;}
   refreshSandboxAdmin();
   sandboxAdminMessage(sandboxKillerFrozen?'Киллер заморожен.':'Киллер разморожен.');
 };
