@@ -244,6 +244,10 @@ const decor = [
   {type:'rock',x:1100,y:1450,r:18},{type:'rock',x:1300,y:150,r:20},
   {type:'bush',x:950,y:1450,r:26},{type:'bush',x:1350,y:1350,r:24},
   {type:'bush',x:1050,y:250,r:22},{type:'bush',x:1350,y:250,r:24},
+  {type:'tree',x:720,y:330,r:38},{type:'tree',x:1660,y:330,r:42},
+  {type:'tree',x:720,y:1180,r:36},{type:'tree',x:1660,y:1180,r:40},
+  {type:'log',x:1040,y:560,r:34},{type:'log',x:1510,y:1060,r:38},
+  {type:'stump',x:650,y:1030,r:24},{type:'stump',x:1760,y:540,r:22},
 ];
 const PATROL_POINTS = [
   {x:1200,y:800},{x:400,y:340},{x:2000,y:340},{x:400,y:1270},{x:2000,y:1270},
@@ -797,7 +801,28 @@ function snapCamera(){
   camera3d.lookAt(PX(target.x) + Math.cos(yaw)*cp, eyeY + Math.sin(pitch), PX(target.y) + Math.sin(yaw)*cp);
 }
 
-function wallMat(){ return new THREE.MeshStandardMaterial({color:0x4a3d28, roughness:0.9}); }
+function wallMat(){
+  if(!wallMat._texture){
+    const canvas=document.createElement('canvas');canvas.width=256;canvas.height=256;
+    const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#4b4030';ctx.fillRect(0,0,256,256);
+    for(let row=0;row<8;row++){
+      const y=row*32;
+      ctx.fillStyle=row%2?'#554733':'#62513a';ctx.fillRect(0,y,256,30);
+      ctx.strokeStyle='rgba(17,15,12,0.42)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,y+30);ctx.lineTo(256,y+30);ctx.stroke();
+      for(let k=0;k<18;k++){
+        const x=(k*47+row*19)%256;
+        ctx.strokeStyle=k%3===0?'rgba(20,17,13,0.30)':'rgba(205,174,125,0.10)';
+        ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x,y+4+(k%7));ctx.lineTo(x+12+(k%5)*7,y+4+(k%7));ctx.stroke();
+      }
+      if(row%3===1){ctx.strokeStyle='rgba(20,16,12,0.45)';ctx.beginPath();ctx.moveTo(38,y+5);ctx.lineTo(42,y+15);ctx.lineTo(35,y+23);ctx.stroke();}
+    }
+    wallMat._texture=new THREE.CanvasTexture(canvas);
+    wallMat._texture.wrapS=THREE.RepeatWrapping;wallMat._texture.wrapT=THREE.RepeatWrapping;
+    wallMat._texture.repeat.set(2,1);wallMat._texture.anisotropy=4;
+  }
+  return new THREE.MeshStandardMaterial({map:wallMat._texture,color:0xffffff,roughness:0.96});
+}
 function woodMat(){ return new THREE.MeshStandardMaterial({color:0xa07a40, roughness:0.85}); }
 function metalMat(){ return new THREE.MeshStandardMaterial({color:0x6a7a8a, roughness:0.4, metalness:0.7}); }
 function makeTree(r){
@@ -822,12 +847,36 @@ function makeRock(r){
   return m;
 }
 function makeBush(r){
-  const g = new THREE.Group();
-  const m1 = new THREE.MeshStandardMaterial({color:0x3a6a3a, roughness:1, flatShading:true});
-  const b1 = new THREE.Mesh(new THREE.IcosahedronGeometry(r, 0), m1);
-  b1.position.y = r * 0.5; b1.castShadow = true; g.add(b1);
-  const b2 = new THREE.Mesh(new THREE.IcosahedronGeometry(r*0.7, 0), m1.clone());
-  b2.material.color.setHex(0x4a7a4a); b2.position.set(r*0.5, r*0.4, r*0.3); b2.castShadow = true; g.add(b2);
+  const g=new THREE.Group();
+  const palette=[0x263f2c,0x31543a,0x3e6040,0x4c6a43];
+  for(let i=0;i<5;i++){
+    const m=new THREE.MeshStandardMaterial({color:palette[i%palette.length],roughness:1,flatShading:true});
+    const b=new THREE.Mesh(new THREE.IcosahedronGeometry(r*(0.48+(i%3)*0.12),1),m);
+    b.position.set((i-2)*r*0.22,r*(0.34+(i%2)*0.12),Math.sin(i*2.1)*r*0.25);
+    b.scale.y=0.7;b.castShadow=true;g.add(b);
+  }
+  return g;
+}
+function makeLog(r){
+  const g=new THREE.Group();
+  const bark=new THREE.MeshStandardMaterial({color:0x493323,roughness:1});
+  const cut=new THREE.MeshStandardMaterial({color:0x9a7650,roughness:0.95});
+  const log=new THREE.Mesh(new THREE.CylinderGeometry(r*0.22,r*0.28,r*1.65,9),bark);
+  log.rotation.z=Math.PI/2;log.position.y=r*0.23;log.castShadow=true;log.receiveShadow=true;g.add(log);
+  for(const side of [-1,1]){
+    const cap=new THREE.Mesh(new THREE.CylinderGeometry(r*0.22,r*0.22,0.035,10),cut);
+    cap.rotation.z=Math.PI/2;cap.position.set(side*r*0.82,r*0.23,0);g.add(cap);
+  }
+  return g;
+}
+function makeStump(r){
+  const g=new THREE.Group();
+  const bark=new THREE.MeshStandardMaterial({color:0x4a3424,roughness:1});
+  const top=new THREE.MeshStandardMaterial({color:0x9b7952,roughness:1});
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(r*0.38,r*0.48,r*0.75,9),bark);
+  trunk.position.y=r*0.36;trunk.castShadow=true;g.add(trunk);
+  const cap=new THREE.Mesh(new THREE.CylinderGeometry(r*0.39,r*0.39,0.06,10),top);
+  cap.position.y=r*0.75;g.add(cap);
   return g;
 }
 
@@ -872,15 +921,35 @@ function buildWorld(){
     const m = new THREE.Mesh(new THREE.BoxGeometry(PX(w.w), 1.6, PX(w.h)), wallMat());
     m.position.set(PX(w.x + w.w/2), 0.8, PX(w.y + w.h/2));
     m.castShadow = true; m.receiveShadow = true; scene.add(m);
+    const alongX=w.w>=w.h, length=PX(alongX?w.w:w.h), cx=PX(w.x+w.w/2), cz=PX(w.y+w.h/2);
+    const trim=woodMat();
+    for(const side of [-1,1]){
+      const rail=new THREE.Mesh(new THREE.BoxGeometry(alongX?length:0.13,0.13,alongX?0.13:length),trim);
+      rail.position.set(cx,1.48,cz+(alongX?side*0.23:0));if(!alongX)rail.position.set(cx+side*0.23,1.48,cz);
+      rail.castShadow=true;scene.add(rail);
+      const lower=new THREE.Mesh(new THREE.BoxGeometry(alongX?length:0.10,0.09,alongX?0.10:length),trim);
+      lower.position.set(cx,0.12,cz+(alongX?side*0.23:0));if(!alongX)lower.position.set(cx+side*0.23,0.12,cz);
+      lower.castShadow=true;scene.add(lower);
+    }
+    const postCount=Math.max(2,Math.floor(length/2.4));
+    for(let i=0;i<=postCount;i++){
+      const t=postCount?i/postCount:0.5;
+      const post=new THREE.Mesh(new THREE.BoxGeometry(alongX?0.12:0.42,1.58,alongX?0.42:0.12),trim);
+      post.position.set(alongX?cx-length/2+length*t:cx,0.79,alongX?cz:cz-length/2+length*t);
+      post.castShadow=true;post.receiveShadow=true;scene.add(post);
+    }
   }
   for (const win of windows){
     const g = new THREE.Group();
-    const sill = new THREE.Mesh(new THREE.BoxGeometry(PX(win.w)+0.1, 0.5, PX(win.h)+0.1), wallMat());
-    sill.position.y = 0.25; sill.castShadow = true; sill.receiveShadow = true; g.add(sill);
-    const fMat = new THREE.MeshStandardMaterial({color:0x7a5a40, roughness:0.7});
-    const f1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.9, 0.08), fMat); f1.position.set(-PX(win.w)/2, 1.0, 0);
-    const f2 = f1.clone(); f2.position.x = PX(win.w)/2; g.add(f1, f2);
-    const topBar = new THREE.Mesh(new THREE.BoxGeometry(PX(win.w), 0.08, 0.08), fMat); topBar.position.y = 1.45; g.add(topBar);
+    const fMat = new THREE.MeshStandardMaterial({color:0x6b4a2e, roughness:0.86});
+    const openingDepth=PX(win.h);
+    const sill = new THREE.Mesh(new THREE.BoxGeometry(0.42,0.12,openingDepth+0.18),fMat);
+    sill.position.set(0,0.68,0);sill.castShadow=true;sill.receiveShadow=true;g.add(sill);
+    const jambL=new THREE.Mesh(new THREE.BoxGeometry(0.16,1.55,0.16),fMat);
+    const jambR=jambL.clone();jambL.position.set(0,0.78,-openingDepth/2);jambR.position.set(0,0.78,openingDepth/2);
+    const lintel=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.16,openingDepth+0.18),fMat);lintel.position.y=1.52;
+    const innerSill=new THREE.Mesh(new THREE.BoxGeometry(0.52,0.10,openingDepth+0.12),woodMat());innerSill.position.set(0,0.78,0);
+    g.add(jambL,jambR,lintel,innerSill);jambL.castShadow=jambR.castShadow=lintel.castShadow=true;
     g.position.set(PX(win.cx), 0, PX(win.cy)); scene.add(g);
     windowMeshes.push({group:g, win, mat:fMat});
   }
@@ -892,10 +961,14 @@ function buildWorld(){
       plank.position.set(0, 0, (j - 1.5) * 0.2);
       plank.castShadow = true; plank.receiveShadow = true; pivot.add(plank);
     }
-    for (let j = 0; j < 2; j++){
-      const beam = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.08, 0.8), woodMat());
-      beam.position.set((j === 0 ? -1 : 1) * PX(CFG.PALLET_LEN) * 0.35, -0.06, 0);
-      beam.castShadow = true; pivot.add(beam);
+    for (let j = 0; j < 3; j++){
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.12,0.84),woodMat());
+      beam.position.set((j-1)*PX(CFG.PALLET_LEN)*0.32,-0.08,0);
+      beam.castShadow=true;beam.receiveShadow=true;pivot.add(beam);
+    }
+    for(const side of [-1,1]){
+      const brace=new THREE.Mesh(new THREE.BoxGeometry(PX(CFG.PALLET_LEN)*0.72,0.07,0.07),woodMat());
+      brace.position.set(0,-0.12,side*0.27);brace.rotation.y=side*0.08;pivot.add(brace);
     }
     pivot.rotation.x = Math.PI / 2.1;
     group.add(pivot);
@@ -1048,6 +1121,8 @@ function buildWorld(){
     if (d.type === 'tree') m = makeTree(r);
     else if (d.type === 'rock') m = makeRock(r);
     else if (d.type === 'bush') m = makeBush(r);
+    else if (d.type === 'log') m = makeLog(r);
+    else if (d.type === 'stump') m = makeStump(r);
     if (m){ m.position.set(PX(d.x), 0, PX(d.y)); scene.add(m); }
   }
   for (let i = 0; i < 100; i++){
@@ -1091,7 +1166,19 @@ function makeSurvivorMesh(){
   const leather=new THREE.MeshStandardMaterial({color:0x30251f,roughness:0.92});
   const metal=new THREE.MeshStandardMaterial({color:0x77838a,metalness:0.55,roughness:0.48});
   const bodyPivot=new THREE.Group();bodyPivot.position.y=1;g.add(bodyPivot);
-  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.31,0.37,0.92,12),fabric);body.position.y=0.02;body.castShadow=true;bodyPivot.add(body);
+  const bodyGeo=new THREE.CylinderGeometry(0.31,0.37,0.92,12,12);
+  const skinIndices=[],skinWeights=[];
+  for(let i=0;i<bodyGeo.attributes.position.count;i++){
+    const y=bodyGeo.attributes.position.getY(i);
+    if(y<0){const t=THREE.MathUtils.clamp((y+0.46)/0.46,0,1);skinIndices.push(0,1,2,0);skinWeights.push(1-t,t,0,0);}
+    else {const t=THREE.MathUtils.clamp(y/0.46,0,1);skinIndices.push(0,1,2,0);skinWeights.push(0,1-t,t,0);}
+  }
+  bodyGeo.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(skinIndices,4));
+  bodyGeo.setAttribute('skinWeight',new THREE.Float32BufferAttribute(skinWeights,4));
+  const body=new THREE.SkinnedMesh(bodyGeo,fabric);body.position.y=0.02;body.castShadow=true;body.receiveShadow=true;bodyPivot.add(body);
+  const pelvisBone=new THREE.Bone();pelvisBone.name='survivor_pelvis';pelvisBone.position.set(0,-0.44,0);bodyPivot.add(pelvisBone);
+  const spineBone=new THREE.Bone();spineBone.name='survivor_spine';spineBone.position.y=0.42;pelvisBone.add(spineBone);
+  const chestBone=new THREE.Bone();chestBone.name='survivor_chest';chestBone.position.y=0.36;spineBone.add(chestBone);
   const vest=new THREE.Mesh(new THREE.BoxGeometry(0.48,0.55,0.31),dark);vest.position.set(0,0.02,0.19);bodyPivot.add(vest);
   for(const side of [-1,1]){
     const strap=new THREE.Mesh(new THREE.BoxGeometry(0.055,0.62,0.07),leather);strap.position.set(side*0.17,0.02,0.22);strap.rotation.z=side*0.12;bodyPivot.add(strap);
@@ -1105,12 +1192,12 @@ function makeSurvivorMesh(){
   const fringe=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.09,0.22),hairMat);fringe.position.set(0,0.12,0.15);headPivot.add(fringe);
   const nose=new THREE.Mesh(new THREE.SphereGeometry(0.035,7,7),skin);nose.position.set(0,-0.025,0.205);headPivot.add(nose);
   function arm(side){
-    const upper=new THREE.Group();upper.position.set(side*0.36,1.35,0);g.add(upper);
+    const upper=new THREE.Bone();upper.name=side<0?'survivor_left_upper_arm':'survivor_right_upper_arm';upper.position.set(side*0.36,1.35,0);g.add(upper);
     const shoulder=new THREE.Mesh(new THREE.SphereGeometry(0.13,10,8),dark);shoulder.position.y=-0.015;upper.add(shoulder);
     const sleeve=new THREE.Mesh(new THREE.CylinderGeometry(0.105,0.12,0.38,10),fabric);sleeve.position.y=-0.18;upper.add(sleeve);
-    const elbow=new THREE.Group();elbow.position.y=-0.36;upper.add(elbow);
+    const elbow=new THREE.Bone();elbow.name=side<0?'survivor_left_elbow':'survivor_right_elbow';elbow.position.y=-0.36;upper.add(elbow);
     const forearm=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.095,0.34,10),fabric);forearm.position.y=-0.16;elbow.add(forearm);
-    const hand=new THREE.Group();hand.position.set(0,-0.35,0.02);elbow.add(hand);
+    const hand=new THREE.Bone();hand.name=side<0?'survivor_left_hand':'survivor_right_hand';hand.position.set(0,-0.35,0.02);elbow.add(hand);
     const palm=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.12,0.12),dark);hand.add(palm);
     for(let i=0;i<4;i++){const finger=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.02,0.085,6),dark);finger.position.set(-0.045+i*0.03,-0.105,0.025);hand.add(finger);}
     const tool=new THREE.Group();const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.022,0.026,0.3,8),leather);grip.position.set(0,-0.02,0.12);grip.rotation.x=Math.PI/2;tool.add(grip);
@@ -1118,19 +1205,21 @@ function makeSurvivorMesh(){
     return{upper,elbow,hand,tool};
   }
   function leg(side){
-    const hip=new THREE.Group();hip.position.set(side*0.16,0.58,0);g.add(hip);
+    const hip=new THREE.Bone();hip.name=side<0?'survivor_left_hip':'survivor_right_hip';hip.position.set(side*0.16,0.58,0);g.add(hip);
     const thigh=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.115,0.36,10),denim);thigh.position.y=-0.18;hip.add(thigh);
-    const knee=new THREE.Group();knee.position.y=-0.36;hip.add(knee);
+    const knee=new THREE.Bone();knee.name=side<0?'survivor_left_knee':'survivor_right_knee';knee.position.y=-0.36;hip.add(knee);
     const cap=new THREE.Mesh(new THREE.SphereGeometry(0.105,8,8),dark);knee.add(cap);
     const shin=new THREE.Mesh(new THREE.CylinderGeometry(0.085,0.095,0.34,10),denim);shin.position.y=-0.17;knee.add(shin);
     const boot=new THREE.Mesh(new THREE.BoxGeometry(0.19,0.13,0.3),leather);boot.position.set(0,-0.36,0.075);knee.add(boot);
     return{hip,knee};
   }
   const l=arm(-1),r=arm(1),ll=leg(-1),rr=leg(1);
+  const survivorSkeleton=new THREE.Skeleton([pelvisBone,spineBone,chestBone,l.upper,l.elbow,l.hand,r.upper,r.elbow,r.hand,ll.hip,ll.knee,rr.hip,rr.knee]);
+  g.updateMatrixWorld(true);body.bind(survivorSkeleton);
   const ringGeo=new THREE.RingGeometry(0.4,0.5,16);ringGeo.rotateX(-Math.PI/2);
   const ringMat=new THREE.MeshBasicMaterial({color:0x66aaff,transparent:true,opacity:0.6,side:THREE.DoubleSide});
   const ring=new THREE.Mesh(ringGeo,ringMat);ring.position.y=0.03;g.add(ring);
-  g.userData={lArm:l.upper,rArm:r.upper,lElbow:l.elbow,rElbow:r.elbow,lHand:l.hand,rHand:r.hand,lTool:l.tool,rTool:r.tool,lLeg:ll.hip,rLeg:rr.hip,lKnee:ll.knee,rKnee:rr.knee,body,bodyPivot,head,headPivot,ringMat};
+  g.userData={lArm:l.upper,rArm:r.upper,lElbow:l.elbow,rElbow:r.elbow,lHand:l.hand,rHand:r.hand,lTool:l.tool,rTool:r.tool,lLeg:ll.hip,rLeg:rr.hip,lKnee:ll.knee,rKnee:rr.knee,body,bodyPivot,head,headPivot,ringMat,skeleton:survivorSkeleton,spineBone,chestBone};
   return g;
 }
 
@@ -1748,7 +1837,7 @@ function updateKillerPlayer(dt, input){
   }
   k.attackHeldPrev=attackNow;
   if(!attackNow&&k.attackLungeTimer<=0)k.attackChargeTimer=0;
-  if (input.space && !input._prevSpace) killerUseAbility();
+// Ability activation is edge-triggered by the main loop; do not trigger it again here.
 }
 
 function updateSurvivorInput(dt, input){
@@ -1976,7 +2065,8 @@ function checkWin(){
   }
 }
 
-function tryInteractHold(input){
+function tryInteractHold(input, dt=1/60){
+  dt=Math.max(0,Math.min(0.05,Number(dt)||0));
   const s=survivor;
   if (s.state==='vaulting'||s.state==='healing') return false;
   let near=null;
@@ -1987,18 +2077,18 @@ function tryInteractHold(input){
   s.repairing=near;
   if (near.type==='gen'){
     let boost=1; if(selectedItem==='toolbox'&&!survivor.itemUsed) boost=1.35;
-    near.ref.progress+=(1/CFG.GENERATOR_REPAIR_TIME)*boost/60;
+    near.ref.progress+=(dt/CFG.GENERATOR_REPAIR_TIME)*boost;
     if (near.ref.progress>=1){
       near.ref.progress=1; near.ref.done=true; screenShake=4;
       game.hint='Генератор готов!'; game.hintTime=2;
     }
     return true;
   } else if (near.type==='totem'){
-    near.ref.progress+=(1/CFG.TOTEM_BREAK_TIME)/60;
+    near.ref.progress+=dt/CFG.TOTEM_BREAK_TIME;
     if (near.ref.progress>=1){near.ref.broken=true;killer.abilityDisabledTimer=CFG.TOTEM_DISABLE_TIME;screenShake=8;game.hint='Тотем сломан!';game.hintTime=3;}
     return true;
   } else if (near.type==='exit'){
-    near.ref.openProgress+=(1/CFG.EXIT_OPEN_TIME)/60;
+    near.ref.openProgress+=dt/CFG.EXIT_OPEN_TIME;
     if (near.ref.openProgress>=1){near.ref.opened=true;game.hint='Выход открыт!';game.hintTime=2;}
     return true;
   }
@@ -2270,7 +2360,9 @@ function sync3D(dt){
     if(u.rLeg)u.rLeg.rotation.x=repairing?-0.04:swing;
     if(u.lKnee)u.lKnee.rotation.x=moving?Math.max(0,-swing)*0.45:(survivor.health==='injured'?0.12:0);
     if(u.rKnee)u.rKnee.rotation.x=moving?Math.max(0,swing)*0.45:(survivor.health==='injured'?0.1:0);
-    if(repairing&&u.body){u.body.rotation.x=-0.16+Math.sin(repairCycle)*0.025;u.body.rotation.z=Math.sin(repairCycle)*0.025;}
+    if(u.spineBone)u.spineBone.rotation.x=repairing?-0.10+beat*0.025:(moving?Math.sin(survivor.walkPhase*2)*0.035:0);
+    if(u.chestBone)u.chestBone.rotation.z=repairing?Math.sin(repairCycle)*0.025:(moving?Math.sin(survivor.walkPhase)*0.025:0);
+    if(repairing&&u.body){u.body.rotation.x=-0.10+Math.sin(repairCycle)*0.015;u.body.rotation.z=Math.sin(repairCycle)*0.015;}
     else if(u.body){u.body.rotation.x*=0.82;u.body.rotation.z*=0.82;}
     if (u.body) u.body.position.y = 1.0 + (moving ? Math.abs(Math.sin(survivor.walkPhase*2))*0.05 : 0);
     if (u.head) u.head.position.y = 1.65 + (moving ? Math.abs(Math.sin(survivor.walkPhase*2))*0.05 : 0);
@@ -2369,11 +2461,11 @@ function sync3D(dt){
     const g = gm.gen, pct = g.progress;
     const activeRepair=!!(survivor.repairing&&survivor.repairing.type==='gen'&&survivor.repairing.ref===g);
     const animT=performance.now()/1000+gm.repairPhase;
-    gm.fanPivot.rotation.z+=(g.done?0.035:(activeRepair?0.18:0.055))*(1+pct*1.5);
+    gm.fanPivot.rotation.z+=(g.done?0.035:(activeRepair?0.18:0.055))*(1+pct*1.5)*dt*60;
     gm.pistonGroup.position.y=0.55+Math.sin(animT*(activeRepair?13:4))*(activeRepair?0.075:0.025);
-    if(gm.flywheelPivot)gm.flywheelPivot.rotation.z+=g.done?0.025:(activeRepair?0.22:0.07);
+    if(gm.flywheelPivot)gm.flywheelPivot.rotation.z+=(g.done?0.025:(activeRepair?0.22:0.07))*dt*60;
     if(gm.leverPivot)gm.leverPivot.rotation.z=activeRepair?Math.sin(animT*8)*0.16:Math.sin(animT*2)*0.025;
-    if(gm.gearPivot)gm.gearPivot.rotation.z+=activeRepair?0.16:0.035;
+    if(gm.gearPivot)gm.gearPivot.rotation.z+=(activeRepair?0.16:0.035)*dt*60;
     if(gm.linkagePivot)gm.linkagePivot.rotation.z=activeRepair?Math.sin(animT*11)*0.24:Math.sin(animT*3)*0.035;
     if(gm.sparkMat){
       const sparkPulse=activeRepair?Math.max(0,Math.sin(animT*17))*0.8:0;
@@ -2783,7 +2875,7 @@ function loop(now){
       prevSpace=pInput.space; prevE=pInput.e; prevF=pInput.f;
       updateSurvivorInput(dt,pInput);
       if(eEdge) tryInteractSingle();
-      if(pInput.e) tryInteractHold(pInput); else survivor.repairing=null;
+      if(pInput.e) tryInteractHold(pInput,dt); else { survivor.repairing=null; survivor.repairTimer=0; }
       if(spaceEdge) tryAbility();
       if(selectedItem==='flashlight') updateFlashlight(dt,pInput.f); else if(fEdge) tryUseItem();
       updatePallets(dt); updateWindows(dt); updateSmoke(dt); updateTraps(dt); updateHatchets(dt); updateBloodTrail(dt);
@@ -2821,7 +2913,7 @@ function loop(now){
       if (playerRole === 'survivor') {
         updateSurvivorInput(dt, pInput);
         if (eEdge) tryInteractSingle();
-        if (pInput.e) tryInteractHold(pInput);
+        if (pInput.e) tryInteractHold(pInput,dt); else { survivor.repairing=null; survivor.repairTimer=0; }
         if (spaceEdge) tryAbility();
         if(selectedItem==='flashlight')updateFlashlight(dt,pInput.f);else if(fEdge)tryUseItem();
         if (MP.active && MP.role === 'host' && guestInput) {
@@ -2839,7 +2931,7 @@ function loop(now){
           if(selectedItem==='flashlight')updateFlashlight(dt,guestInput.f);else if(guestInput.f)tryUseItem();
           if (guestInput.e) {
             if (!survivor.repairing) tryInteractSingle();
-            tryInteractHold(guestInput);
+            tryInteractHold(guestInput,dt);
           } else { survivor.repairing = null; }
         } else {
           updateSurvivorAI(dt);
