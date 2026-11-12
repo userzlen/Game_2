@@ -679,7 +679,13 @@ function broadcastState(){
     generators: generators.map(g => ({ progress: g.progress, done: g.done })),
     totem: { broken: totem.broken, progress: totem.progress },
     doors: exitDoors.map(d => ({ opened: d.opened, openProgress: d.openProgress })),
-    windows: windows.map(w => ({ blockedTimer: w.blockedTimer })),
+    windows: windows.map(w => ({ blockedTimer: w.blockedTimer, vaultTimestamps: w.vaultTimestamps.slice(-3) })),
+    effects: {
+      smoke: smokeClouds.slice(-10).map(c => ({x:c.x,y:c.y,r:c.r,timer:c.timer})),
+      blood: bloodTrail.slice(-100).map(p => ({x:p.x,y:p.y,time:p.time})),
+      traps: traps.slice(-20).map(t => ({x:t.x,y:t.y,active:!!t.active})),
+      hatchets: hatchets.slice(-10).map(h => ({x:h.x,y:h.y,vx:h.vx,vy:h.vy,life:h.life})),
+    },
     time: game.time,
     screen: game.screen,
   };
@@ -744,9 +750,19 @@ function applyStateToWorld(state){
     if (state.doors[i]){ exitDoors[i].opened = state.doors[i].opened; exitDoors[i].openProgress = state.doors[i].openProgress; }
   }
   for (let i = 0; i < windows.length; i++){
-    if (state.windows[i]) windows[i].blockedTimer = state.windows[i].blockedTimer;
+    if (state.windows && state.windows[i]) {
+      windows[i].blockedTimer = Math.max(0, Number(state.windows[i].blockedTimer)||0);
+      if (Array.isArray(state.windows[i].vaultTimestamps)) windows[i].vaultTimestamps=state.windows[i].vaultTimestamps.filter(Number.isFinite).slice(-3);
+    }
   }
-  game.time = state.time;
+  if(state.effects){
+    const safeList=(list,max)=>Array.isArray(list)?list.slice(-max):[];
+    smokeClouds.splice(0,smokeClouds.length,...safeList(state.effects.smoke,10).filter(c=>Number.isFinite(c.x)&&Number.isFinite(c.y)).map(c=>({x:c.x,y:c.y,r:Math.max(8,Math.min(240,Number(c.r)||70)),timer:Math.max(0,Math.min(10,Number(c.timer)||0))})));
+    bloodTrail.splice(0,bloodTrail.length,...safeList(state.effects.blood,100).filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)&&Number.isFinite(p.time)).map(p=>({x:p.x,y:p.y,time:p.time})));
+    traps.splice(0,traps.length,...safeList(state.effects.traps,20).filter(t=>Number.isFinite(t.x)&&Number.isFinite(t.y)).map(t=>({x:t.x,y:t.y,active:!!t.active})));
+    hatchets.splice(0,hatchets.length,...safeList(state.effects.hatchets,10).filter(h=>[h.x,h.y,h.vx,h.vy,h.life].every(Number.isFinite)).map(h=>({x:h.x,y:h.y,vx:h.vx,vy:h.vy,life:h.life})));
+  }
+  game.time = Number.isFinite(state.time)?state.time:game.time;
   if (state.screen && state.screen !== 'playing' && game.screen === 'playing'){
     game.screen = state.screen;
     if (state.screen === 'win') showEndScreen('ПОБЕГ', 'Ты сбежал', '#7fffa8');
@@ -1536,6 +1552,12 @@ function findPath(from,to){
       const nk=ny*GRID_W+nx;
       if(closed.has(nk)) continue;
       const cc=costMap[nk]; if(cc>=999) continue;
+      // Prevent diagonal corner cutting through the meeting point of two blocked cells.
+      if(dx!==0&&dy!==0){
+        const sideA=costMap[cur.y*GRID_W+(cur.x+dx)];
+        const sideB=costMap[(cur.y+dy)*GRID_W+cur.x];
+        if(sideA>=999||sideB>=999) continue;
+      }
       const step=(dx===0||dy===0)?1:1.414;
       const g=cur.g+step*cc;
       const ex2=open.get(nk);
