@@ -128,7 +128,7 @@ const CFG = {
   HEAL_TIME:3, HIT_COOLDOWN:1.2, INJURED_SPEED_MULT:0.92,
   GENERATOR_COUNT:3, GENERATOR_REPAIR_TIME:10, GENERATOR_INTERACT:75,
   EXIT_OPEN_TIME:3, EXIT_INTERACT:80,
-  BLOOD_TRAIL_INTERVAL:0.3, BLOOD_TRAIL_LIFETIME:8,
+  BLOOD_TRAIL_INTERVAL:0.42, BLOOD_TRAIL_LIFETIME:6, BLOOD_TRAIL_VIEW_DISTANCE:260,
   BLOODLUST_THRESHOLD:10, BLOODLUST_MAX:3,
   KILLER_INSTINCT_INTERVAL:20, KILLER_INSTINCT_DURATION:1.5,
   TOTEM_BREAK_TIME:2, TOTEM_INTERACT:70, TOTEM_DISABLE_TIME:60,
@@ -944,14 +944,14 @@ function sanitizeDecorLayout(){
 function buildWorld(){
   sanitizeDecorLayout();
   for (const w of walls){
-    const m = new THREE.Mesh(new THREE.BoxGeometry(PX(w.w), 1.6, PX(w.h)), wallMat());
-    m.position.set(PX(w.x + w.w/2), 0.8, PX(w.y + w.h/2));
+    const m = new THREE.Mesh(new THREE.BoxGeometry(PX(w.w), 1.85, PX(w.h)), wallMat());
+    m.position.set(PX(w.x + w.w/2), 0.925, PX(w.y + w.h/2));
     m.castShadow = true; m.receiveShadow = true; scene.add(m);
     const alongX=w.w>=w.h, length=PX(alongX?w.w:w.h), cx=PX(w.x+w.w/2), cz=PX(w.y+w.h/2);
     const trim=woodMat();
     for(const side of [-1,1]){
       const rail=new THREE.Mesh(new THREE.BoxGeometry(alongX?length:0.13,0.13,alongX?0.13:length),trim);
-      rail.position.set(cx,1.48,cz+(alongX?side*0.23:0));if(!alongX)rail.position.set(cx+side*0.23,1.48,cz);
+      rail.position.set(cx,1.72,cz+(alongX?side*0.23:0));if(!alongX)rail.position.set(cx+side*0.23,1.72,cz);
       rail.castShadow=true;scene.add(rail);
       const lower=new THREE.Mesh(new THREE.BoxGeometry(alongX?length:0.10,0.09,alongX?0.10:length),trim);
       lower.position.set(cx,0.12,cz+(alongX?side*0.23:0));if(!alongX)lower.position.set(cx+side*0.23,0.12,cz);
@@ -960,8 +960,8 @@ function buildWorld(){
     const postCount=Math.max(2,Math.floor(length/2.4));
     for(let i=0;i<=postCount;i++){
       const t=postCount?i/postCount:0.5;
-      const post=new THREE.Mesh(new THREE.BoxGeometry(alongX?0.12:0.42,1.58,alongX?0.42:0.12),trim);
-      post.position.set(alongX?cx-length/2+length*t:cx,0.79,alongX?cz:cz-length/2+length*t);
+      const post=new THREE.Mesh(new THREE.BoxGeometry(alongX?0.12:0.42,1.83,alongX?0.42:0.12),trim);
+      post.position.set(alongX?cx-length/2+length*t:cx,0.915,alongX?cz:cz-length/2+length*t);
       post.castShadow=true;post.receiveShadow=true;scene.add(post);
     }
   }
@@ -1214,7 +1214,7 @@ function buildWorld(){
   }
   survivorMesh = makeSurvivorMesh(); scene.add(survivorMesh);
   firstPersonRepairRig = makeFirstPersonRepairRig(); camera3d.add(firstPersonRepairRig.group);
-  killerMesh = makeKillerMesh(); scene.add(killerMesh);
+  killerMesh = makeKillerMesh(); killerMesh.scale.setScalar(0.78); scene.add(killerMesh);
   killerAuraLight = new THREE.PointLight(0xff3333, 0.8, 8); killerAuraLight.position.y = 1; killerMesh.add(killerAuraLight);
 }
 
@@ -1348,9 +1348,18 @@ function makeKillerMesh(){
   const pelvisBone=new THREE.Bone();pelvisBone.name='killer_pelvis';pelvisBone.position.set(0,-0.57,0);bodyPivot.add(pelvisBone);
   const spineBone=new THREE.Bone();spineBone.name='killer_spine';spineBone.position.y=0.52;pelvisBone.add(spineBone);
   const chestBone=new THREE.Bone();chestBone.name='killer_chest';chestBone.position.y=0.48;spineBone.add(chestBone);
-  const apron=new THREE.Mesh(new THREE.BoxGeometry(0.56,0.82,0.12),leather);apron.position.set(0,-0.1,0.29);bodyPivot.add(apron);
-  const panel=new THREE.Mesh(new THREE.BoxGeometry(0.66,0.7,0.08),edge);panel.position.set(0,-0.02,0.22);bodyPivot.add(panel);
-  for(const side of [-1,1]){const strap=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.92,0.08),leather);strap.position.set(side*0.2,0.02,0.25);bodyPivot.add(strap);}
+  const coatSkirt=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.48,0.72,12,1,true),coat);
+  coatSkirt.position.set(0,-0.36,0);coatSkirt.castShadow=true;coatSkirt.receiveShadow=true;bodyPivot.add(coatSkirt);
+  const apron=new THREE.Mesh(new THREE.BoxGeometry(0.56,0.82,0.12),leather);apron.position.set(0,-0.1,0.29);apron.castShadow=true;bodyPivot.add(apron);
+  const panel=new THREE.Mesh(new THREE.BoxGeometry(0.66,0.7,0.08),edge);panel.position.set(0,-0.02,0.22);panel.castShadow=true;bodyPivot.add(panel);
+  const belt=new THREE.Mesh(new THREE.TorusGeometry(0.39,0.055,7,16),leather);belt.rotation.x=Math.PI/2;belt.position.y=-0.43;bodyPivot.add(belt);
+  const buckle=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.11,0.045),metal);buckle.position.set(0,-0.43,0.39);bodyPivot.add(buckle);
+  for(const side of [-1,1]){
+    const strap=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.92,0.08),leather);strap.position.set(side*0.2,0.02,0.25);bodyPivot.add(strap);
+    const pouch=new THREE.Mesh(new THREE.BoxGeometry(0.19,0.22,0.16),leather);pouch.position.set(side*0.28,-0.48,0.30);pouch.rotation.z=side*0.08;bodyPivot.add(pouch);
+    const pouchFlap=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.055,0.17),edge);pouchFlap.position.set(side*0.28,-0.37,0.31);bodyPivot.add(pouchFlap);
+    const shoulderPad=new THREE.Mesh(new THREE.SphereGeometry(0.19,10,8),leather);shoulderPad.scale.set(1.12,0.66,1.0);shoulderPad.position.set(side*0.4,0.38,0.02);bodyPivot.add(shoulderPad);
+  }
   const headPivot=new THREE.Group();headPivot.position.set(0,2.17,0);g.add(headPivot);
   const head=new THREE.Mesh(new THREE.SphereGeometry(0.245,14,12),maskMat);headPivot.add(head);
   const hood=new THREE.Mesh(new THREE.SphereGeometry(0.31,14,10,0,Math.PI*2,0,Math.PI*0.72),leather);hood.position.y=0.045;headPivot.add(hood);
@@ -1373,9 +1382,11 @@ function makeKillerMesh(){
     const hip=new THREE.Bone();hip.name=side<0?'killer_left_hip':'killer_right_hip';hip.position.set(side*0.19,0.72,0);g.add(hip);
     const thigh=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.13,0.42,10),leather);thigh.position.y=-0.21;hip.add(thigh);
     const knee=new THREE.Bone();knee.name=side<0?'killer_left_knee':'killer_right_knee';knee.position.y=-0.42;hip.add(knee);
-    const pad=new THREE.Mesh(new THREE.SphereGeometry(0.12,8,8),edge);knee.add(pad);
+    const pad=new THREE.Mesh(new THREE.SphereGeometry(0.12,8,8),edge);pad.scale.set(1.08,0.72,0.62);knee.add(pad);
     const shin=new THREE.Mesh(new THREE.CylinderGeometry(0.095,0.12,0.4,10),leather);shin.position.y=-0.2;knee.add(shin);
-    const boot=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.15,0.34),coat);boot.position.set(0,-0.42,0.07);knee.add(boot);
+    const shinGuard=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.28,0.045),metal);shinGuard.position.set(0,-0.19,0.105);knee.add(shinGuard);
+    const boot=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.16,0.36),coat);boot.position.set(0,-0.42,0.07);knee.add(boot);
+    const sole=new THREE.Mesh(new THREE.BoxGeometry(0.245,0.045,0.37),leather);sole.position.set(0,-0.50,0.075);knee.add(sole);
     return{hip,knee};
   }
   const l=arm(-1,false),r=arm(1,true),ll=leg(-1),rr=leg(1);
@@ -2124,6 +2135,7 @@ function updateBloodTrail(dt){
   survivor.trailTimer=(survivor.trailTimer||0)+dt;
   if (moving&&survivor.noTrailTimer<=0&&survivor.invisibleTimer<=0&&survivor.trailTimer>CFG.BLOOD_TRAIL_INTERVAL){
     bloodTrail.push({x:survivor.x,y:survivor.y,time:game.time});
+    if(bloodTrail.length>100)bloodTrail.splice(0,bloodTrail.length-100);
     survivor.trailTimer=0;
   }
   for(let i=bloodTrail.length-1;i>=0;i--) if(game.time-bloodTrail[i].time>CFG.BLOOD_TRAIL_LIFETIME) bloodTrail.splice(i,1);
@@ -2380,7 +2392,7 @@ function sync3D(dt){
   if (!survivorMesh||!killerMesh) return;
   const myIsSurvivor = playerRole === 'survivor';
   survivorMesh.visible = !myIsSurvivor;
-  killerMesh.visible = !sandboxMode;
+  killerMesh.visible = playerRole !== 'killer' && !sandboxMode;
   if(firstPersonRepairRig){
     const showHands=myIsSurvivor&&survivor.state==='idle'&&!!(survivor.repairing&&survivor.repairing.type==='gen');
     firstPersonRepairRig.group.visible=showHands;
@@ -2580,13 +2592,21 @@ function sync3D(dt){
     else wm.mat.color.setHex(0x7a5a40);
   }
 
-  for (let i=0;i<bloodTrailMeshes.length;i++){
-    const m = bloodTrailMeshes[i];
-    if (i < bloodTrail.length){
-      const p = bloodTrail[i];
-      m.position.set(PX(p.x), 0.02, PX(p.y));
-      m.material.opacity = Math.max(0, 1-(game.time-p.time)/CFG.BLOOD_TRAIL_LIFETIME) * 0.7;
-    } else m.material.opacity = 0;
+  const canTrackBlood=playerRole==='killer'&&!sandboxMode;
+  for(let i=0;i<bloodTrailMeshes.length;i++){
+    const m=bloodTrailMeshes[i];
+    if(i<bloodTrail.length&&canTrackBlood){
+      const p=bloodTrail[i],distance=Math.hypot(p.x-killer.x,p.y-killer.y);
+      const inRange=distance<=CFG.BLOOD_TRAIL_VIEW_DISTANCE;
+      const clear=inRange&&lineOfSightFree(killer.x,killer.y,p.x,p.y);
+      m.visible=clear;
+      if(clear){
+        m.position.set(PX(p.x),0.021,PX(p.y));
+        const ageFade=Math.max(0,1-(game.time-p.time)/CFG.BLOOD_TRAIL_LIFETIME);
+        const distanceFade=Math.max(0.12,1-distance/CFG.BLOOD_TRAIL_VIEW_DISTANCE);
+        m.material.opacity=ageFade*distanceFade*0.68;
+      }else m.material.opacity=0;
+    }else{m.visible=false;m.material.opacity=0;}
   }
 
   for (let i=0;i<trapMeshes.length;i++){
@@ -2610,7 +2630,7 @@ function sync3D(dt){
   }
 
   const target = myIsSurvivor ? survivor : killer;
-  const eyeY = myIsSurvivor ? 1.6 : 2.2;
+  const eyeY = myIsSurvivor ? 1.6 : 1.78;
   let camX = PX(target.x), camZ = PX(target.y), camY = eyeY;
   if (target.state === 'vaulting') camY += Math.sin((target.vaultTimer/target.vaultDuration) * Math.PI) * 0.6;
   camera3d.position.set(camX, camY, camZ);
