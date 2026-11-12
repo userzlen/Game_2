@@ -1525,7 +1525,7 @@ function lineOfSightFree(x1,y1,x2,y2){
   for(let i=1;i<steps;i++){
     const t=i/steps,x=x1+dx*t,y=y1+dy*t;
     for(const w of walls) if(x>w.x-r&&x<w.x+w.w+r&&y>w.y-r&&y<w.y+w.h+r) return false;
-    for(const door of exitDoors) if(!door.opened&&x>door.x-r&&x<door.x+door.w+r&&y>door.y-r&&y<door.y+door.h+r) return false;
+    for(const door of exitDoors) if(!door.opened&&!(x2>=door.x&&x2<=door.x+door.w&&y2>=door.y&&y2<=door.y+door.h)&&x>door.x-r&&x<door.x+door.w+r&&y>door.y-r&&y<door.y+door.h+r) return false;
   }
   return true;
 }
