@@ -282,6 +282,7 @@ const killer = {
 const smokeClouds = [], bloodTrail = [], traps = [], hatchets = [];
 let screenShake = 0;
 const game = {screen:'loading',time:0,hint:'',hintTime:0};
+let sandboxMode = false, sandboxHudVisible = true;
 let selectedSurvivor = 'sprinter', selectedItem = 'flashlight', killerAbilityKey = 'dash';
 let playerRole = 'survivor';
 let revealStartTime = 0;
@@ -2165,6 +2166,12 @@ addEventListener('keydown', e => {
     keys[k]=true;
     if ([' ','arrowup','arrowdown','arrowleft','arrowright','e','r','f'].includes(k)) e.preventDefault();
     if (game.screen!=='playing') return;
+    if (sandboxMode && k==='h') {
+      sandboxHudVisible = !sandboxHudVisible;
+      document.getElementById('hud').style.display = sandboxHudVisible ? '' : 'none';
+      document.getElementById('crosshair').style.display = sandboxHudVisible ? '' : 'none';
+      return;
+    }
     if (k==='escape'){ game.screen='paused'; showPauseScreen(); document.exitPointerLock(); }
   }
 });
@@ -2208,7 +2215,7 @@ function sync3D(dt){
   if (!survivorMesh||!killerMesh) return;
   const myIsSurvivor = playerRole === 'survivor';
   survivorMesh.visible = !myIsSurvivor;
-  killerMesh.visible = true;
+  killerMesh.visible = !sandboxMode;
   if(firstPersonRepairRig){
     const showHands=myIsSurvivor&&survivor.state==='idle'&&!!(survivor.repairing&&survivor.repairing.type==='gen');
     firstPersonRepairRig.group.visible=showHands;
@@ -2490,7 +2497,7 @@ function updateHUD(){
     else bottom.textContent = 'ЛКМ — атака/захват мыши · WASD — движение · Space — способность · E — перелезть/сломать · Esc — пауза';
   }
 
-  crosshair.classList.toggle('show', game.screen === 'playing' && document.pointerLockElement === canvas);
+  crosshair.classList.toggle('show', game.screen === 'playing' && document.pointerLockElement === canvas && (!sandboxMode || sandboxHudVisible));
   if(camera3d&&camera3d.userData.flashlightLight&&playerRole==='survivor')camera3d.userData.flashlightLight.intensity=survivor.flashlightActive?1.8:0;
   if(camera3d&&camera3d.userData.flashlightBeam)camera3d.userData.flashlightBeam.visible=playerRole==='survivor'&&survivor.flashlightActive;
   const blindOverlay=document.getElementById('blind-effect');
@@ -2516,7 +2523,7 @@ function showEndScreen(title, subtitle, color){
 }
 function showPauseScreen(){
   screenEl.classList.add('show');
-  screenEl.innerHTML = `<h1 style="color:#8ab4ff">ПАУЗА</h1><div><button class="btn green" onclick="window.__resume()">ПРОДОЛЖИТЬ</button><button class="btn" onclick="window.__menu()">В МЕНЮ</button></div>`;
+  screenEl.innerHTML = `<h1 style="color:#8ab4ff">${sandboxMode?'ПЕСОЧНИЦА · ПАУЗА':'ПАУЗА'}</h1><div>${sandboxMode?'<div style="color:#9ab0c8;margin-bottom:18px;">WASD — движение · мышь — обзор · E — взаимодействие · H — скрыть интерфейс</div>':''}<button class="btn green" onclick="window.__resume()">ПРОДОЛЖИТЬ</button><button class="btn" onclick="window.__menu()">В МЕНЮ</button></div>`;
   document.exitPointerLock();
 }
 function showMainMenu(){
@@ -2528,9 +2535,11 @@ function showMainMenu(){
       Одиночная игра или P2P матч с другом. Хост запускает игру, гость получает роль.
     </div>
     <div>
+      <button class="btn green" onclick="window.__sandbox()">ПЕСОЧНИЦА</button>
       <button class="btn" onclick="window.__sp()">ОДИНОЧНАЯ</button>
       <button class="btn blue" onclick="window.__mpMenu()">МУЛЬТИПЛЕЕР</button>
-    </div>`;
+    </div>
+    <div style="color:#7890a8;font-size:12px;margin-top:12px;">Песочница — свободное исследование карты без убийцы и условий победы.</div>`;
 }
 function showRoleSelect(){
   screenEl.classList.add('show');
@@ -2621,6 +2630,18 @@ window.__menu = async () => {
   if (MP.active) await cleanupMultiplayer(MP.role === 'host');
   game.screen = 'menu';
   showMainMenu();
+};
+window.__sandbox = () => {
+  if (MP.active) cleanupMultiplayer(MP.role === 'host');
+  MP.active = false; MP.connected = false; MP.myRole = 'survivor';
+  playerRole = 'survivor'; sandboxMode = true; sandboxHudVisible = true;
+  document.getElementById('hud').style.display = '';
+  document.getElementById('crosshair').style.display = '';
+  resetGame();
+  survivor.x = 1200; survivor.y = 800; survivor.facing = 0; survivor.pitch = 0;
+  killer.x = -5000; killer.y = -5000;
+  game.screen = 'playing'; game.hint = 'ПЕСОЧНИЦА: исследуй карту. H — скрыть интерфейс, Esc — меню паузы.'; game.hintTime = 10;
+  hideScreen(); snapCamera();
 };
 window.__sp = async () => {
   if (MP.active) await cleanupMultiplayer(MP.role === 'host');
@@ -2721,6 +2742,9 @@ function resetGame(){
   game.hintTime=6;
 }
 function beginPlaying(){
+  sandboxMode = false; sandboxHudVisible = true;
+  document.getElementById('hud').style.display = '';
+  document.getElementById('crosshair').style.display = '';
   resetGame();
   if (MP.active) {
     playerRole = MP.myRole;
@@ -2746,7 +2770,21 @@ function loop(now){
 
     if (game.screen === 'killer_reveal' && performance.now() - revealStartTime > 8000) beginPlaying();
 
-    if (MP.active && MP.role === 'guest') {
+    if (sandboxMode && game.screen === 'playing') {
+      game.time += dt;
+      if (game.hintTime > 0) game.hintTime -= dt;
+      const pInput = {w:!!keys['w'],a:!!keys['a'],s:!!keys['s'],d:!!keys['d'],space:!!keys[' '],e:!!keys['e'],f:!!keys['f'],attack:false};
+      const spaceEdge = pInput.space && !prevSpace;
+      const eEdge = pInput.e && !prevE;
+      const fEdge = pInput.f && !prevF;
+      prevSpace=pInput.space; prevE=pInput.e; prevF=pInput.f;
+      updateSurvivorInput(dt,pInput);
+      if(eEdge) tryInteractSingle();
+      if(pInput.e) tryInteractHold(pInput); else survivor.repairing=null;
+      if(spaceEdge) tryAbility();
+      if(selectedItem==='flashlight') updateFlashlight(dt,pInput.f); else if(fEdge) tryUseItem();
+      updatePallets(dt); updateWindows(dt); updateSmoke(dt); updateTraps(dt); updateHatchets(dt); updateBloodTrail(dt);
+    } else if (MP.active && MP.role === 'guest') {
       sendInput();
       if (game.hintTime > 0) game.hintTime -= dt;
     } else if (game.screen === 'playing') {
