@@ -1510,6 +1510,15 @@ function resolveCircleRotRect(c,px,py,len,th,ang){
     c.x+=px2*c2-py2*s2; c.y+=px2*s2+py2*c2;
   }
 }
+function collideKiller(k){
+  let blocked=false;
+  for(const w of walls) if(circleRect(k.x,k.y,k.radius,w.x,w.y,w.w,w.h)){resolveCircleRect(k,w);blocked=true;}
+  for(const p of pallets) if((p.state==='dropped'||p.state==='breaking')&&circleRotRect(k.x,k.y,k.radius,p.x,p.y,CFG.PALLET_LEN,CFG.PALLET_THICK,p.angle)){resolveCircleRotRect(k,p.x,p.y,CFG.PALLET_LEN,CFG.PALLET_THICK,p.angle);blocked=true;}
+  for(const door of exitDoors) if(!door.opened&&circleRect(k.x,k.y,k.radius,door.x,door.y,door.w,door.h)){resolveCircleRect(k,door);blocked=true;}
+  k.x=Math.max(k.radius+20,Math.min(2380-k.radius,k.x));
+  k.y=Math.max(k.radius+20,Math.min(1580-k.radius,k.y));
+  return blocked;
+}
 function lineOfSightFree(x1,y1,x2,y2){
   const dx=x2-x1,dy=y2-y1,dist=Math.hypot(dx,dy);
   const steps=Math.ceil(dist/20), r=8;
@@ -2060,6 +2069,7 @@ function collideSurvivor(s){
     if((p.state==='dropped'||p.state==='breaking')&&circleRotRect(s.x,s.y,s.radius,p.x,p.y,CFG.PALLET_LEN,CFG.PALLET_THICK,p.angle))
       resolveCircleRotRect(s,p.x,p.y,CFG.PALLET_LEN,CFG.PALLET_THICK,p.angle);
   }
+  for(const door of exitDoors) if(!door.opened&&circleRect(s.x,s.y,s.radius,door.x,door.y,door.w,door.h)) resolveCircleRect(s,door);
 }
 
 function updateSurvivorAI(dt){
