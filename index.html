@@ -1254,6 +1254,27 @@ function buildWorld(){
   killerAuraLight = new THREE.PointLight(0xff3333, 0.8, 8); killerAuraLight.position.y = 1; killerMesh.add(killerAuraLight);
 }
 
+function attachSkinnedLimb(root,skeleton,material,opts){
+  const {x,topY,bottomY,topRadius,bottomRadius,upperBone,lowerBone,splitY}=opts;
+  const height=topY-bottomY;
+  const geometry=new THREE.CylinderGeometry(topRadius,bottomRadius,height,12,18);
+  geometry.translate(x,(topY+bottomY)/2,0);
+  const indices=[],weights=[];
+  const pos=geometry.attributes.position,blend=0.11;
+  for(let i=0;i<pos.count;i++){
+    const y=pos.getY(i),t=THREE.MathUtils.clamp((y-(splitY-blend))/(blend*2),0,1);
+    const smooth=t*t*(3-2*t);
+    indices.push(upperBone,lowerBone,0,0);
+    weights.push(smooth,1-smooth,0,0);
+  }
+  geometry.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(indices,4));
+  geometry.setAttribute('skinWeight',new THREE.Float32BufferAttribute(weights,4));
+  const mesh=new THREE.SkinnedMesh(geometry,material);
+  mesh.castShadow=true;mesh.receiveShadow=true;mesh.frustumCulled=false;
+  root.add(mesh);root.updateMatrixWorld(true);mesh.bind(skeleton);
+  return mesh;
+}
+
 function makeSurvivorMesh(){
   const g=new THREE.Group();
   const fabric=new THREE.MeshStandardMaterial({color:0x425d70,roughness:0.94});fabric.skinning=true;
@@ -1294,6 +1315,7 @@ function makeSurvivorMesh(){
     const sleeve=new THREE.Mesh(new THREE.CylinderGeometry(0.105,0.12,0.38,10),fabric);sleeve.position.y=-0.18;upper.add(sleeve);
     const elbow=new THREE.Bone();elbow.name=side<0?'survivor_left_elbow':'survivor_right_elbow';elbow.position.y=-0.36;upper.add(elbow);
     const forearm=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.095,0.34,10),fabric);forearm.position.y=-0.16;elbow.add(forearm);
+    sleeve.visible=false;forearm.visible=false;
     const hand=new THREE.Bone();hand.name=side<0?'survivor_left_hand':'survivor_right_hand';hand.position.set(0,-0.35,0.02);elbow.add(hand);
     const palm=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.12,0.12),dark);hand.add(palm);
     for(let i=0;i<4;i++){const finger=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.02,0.085,6),dark);finger.position.set(-0.045+i*0.03,-0.105,0.025);hand.add(finger);}
@@ -1307,12 +1329,17 @@ function makeSurvivorMesh(){
     const knee=new THREE.Bone();knee.name=side<0?'survivor_left_knee':'survivor_right_knee';knee.position.y=-0.36;hip.add(knee);
     const cap=new THREE.Mesh(new THREE.SphereGeometry(0.105,8,8),dark);knee.add(cap);
     const shin=new THREE.Mesh(new THREE.CylinderGeometry(0.085,0.095,0.34,10),denim);shin.position.y=-0.17;knee.add(shin);
+    thigh.visible=false;shin.visible=false;
     const boot=new THREE.Mesh(new THREE.BoxGeometry(0.19,0.13,0.3),leather);boot.position.set(0,-0.36,0.075);knee.add(boot);
     return{hip,knee};
   }
   const l=arm(-1),r=arm(1),ll=leg(-1),rr=leg(1);
   const survivorSkeleton=new THREE.Skeleton([pelvisBone,spineBone,chestBone,l.upper,l.elbow,l.hand,r.upper,r.elbow,r.hand,ll.hip,ll.knee,rr.hip,rr.knee]);
   g.updateMatrixWorld(true);body.bind(survivorSkeleton);
+  attachSkinnedLimb(g,survivorSkeleton,fabric,{x:-0.36,topY:1.37,bottomY:0.61,topRadius:0.12,bottomRadius:0.075,upperBone:3,lowerBone:4,splitY:0.99});
+  attachSkinnedLimb(g,survivorSkeleton,fabric,{x:0.36,topY:1.37,bottomY:0.61,topRadius:0.12,bottomRadius:0.075,upperBone:6,lowerBone:7,splitY:0.99});
+  attachSkinnedLimb(g,survivorSkeleton,denim,{x:-0.16,topY:0.60,bottomY:-0.13,topRadius:0.14,bottomRadius:0.09,upperBone:9,lowerBone:10,splitY:0.22});
+  attachSkinnedLimb(g,survivorSkeleton,denim,{x:0.16,topY:0.60,bottomY:-0.13,topRadius:0.14,bottomRadius:0.09,upperBone:11,lowerBone:12,splitY:0.22});
   const ringGeo=new THREE.RingGeometry(0.4,0.5,16);ringGeo.rotateX(-Math.PI/2);
   const ringMat=new THREE.MeshBasicMaterial({color:0x66aaff,transparent:true,opacity:0.6,side:THREE.DoubleSide});
   const ring=new THREE.Mesh(ringGeo,ringMat);ring.position.y=0.03;g.add(ring);
@@ -1408,6 +1435,7 @@ function makeKillerMesh(){
     const sleeve=new THREE.Mesh(new THREE.CylinderGeometry(0.105,0.12,0.42,10),coat);sleeve.position.y=-0.2;upper.add(sleeve);
     const elbow=new THREE.Bone();elbow.name=side<0?'killer_left_elbow':'killer_right_elbow';elbow.position.y=-0.4;upper.add(elbow);
     const forearm=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.095,0.36,10),leather);forearm.position.y=-0.17;elbow.add(forearm);
+    sleeve.visible=false;forearm.visible=false;
     const hand=new THREE.Bone();hand.name=side<0?'killer_left_hand':'killer_right_hand';hand.position.set(0,-0.39,0.02);elbow.add(hand);
     const palm=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.13,0.1),leather);hand.add(palm);
     for(let i=0;i<4;i++){const finger=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.02,0.1,6),leather);finger.position.set(-0.045+i*0.03,-0.1,0.015);hand.add(finger);}
@@ -1420,6 +1448,7 @@ function makeKillerMesh(){
     const knee=new THREE.Bone();knee.name=side<0?'killer_left_knee':'killer_right_knee';knee.position.y=-0.42;hip.add(knee);
     const pad=new THREE.Mesh(new THREE.SphereGeometry(0.12,8,8),edge);pad.scale.set(1.08,0.72,0.62);knee.add(pad);
     const shin=new THREE.Mesh(new THREE.CylinderGeometry(0.095,0.12,0.4,10),leather);shin.position.y=-0.2;knee.add(shin);
+    thigh.visible=false;shin.visible=false;
     const shinGuard=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.28,0.045),metal);shinGuard.position.set(0,-0.19,0.105);knee.add(shinGuard);
     const boot=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.16,0.36),coat);boot.position.set(0,-0.42,0.07);knee.add(boot);
     const sole=new THREE.Mesh(new THREE.BoxGeometry(0.245,0.045,0.37),leather);sole.position.set(0,-0.50,0.075);knee.add(sole);
@@ -1428,6 +1457,10 @@ function makeKillerMesh(){
   const l=arm(-1,false),r=arm(1,true),ll=leg(-1),rr=leg(1);
   const killerSkeleton=new THREE.Skeleton([pelvisBone,spineBone,chestBone,l.upper,l.elbow,l.hand,r.upper,r.elbow,r.hand,ll.hip,ll.knee,rr.hip,rr.knee]);
   g.updateMatrixWorld(true);body.bind(killerSkeleton);
+  attachSkinnedLimb(g,killerSkeleton,coat,{x:-0.42,topY:1.74,bottomY:0.91,topRadius:0.12,bottomRadius:0.075,upperBone:3,lowerBone:4,splitY:1.32});
+  attachSkinnedLimb(g,killerSkeleton,coat,{x:0.42,topY:1.74,bottomY:0.91,topRadius:0.12,bottomRadius:0.075,upperBone:6,lowerBone:7,splitY:1.32});
+  attachSkinnedLimb(g,killerSkeleton,leather,{x:-0.19,topY:0.74,bottomY:-0.12,topRadius:0.15,bottomRadius:0.095,upperBone:9,lowerBone:10,splitY:0.30});
+  attachSkinnedLimb(g,killerSkeleton,leather,{x:0.19,topY:0.74,bottomY:-0.12,topRadius:0.15,bottomRadius:0.095,upperBone:11,lowerBone:12,splitY:0.30});
   const ringGeo=new THREE.RingGeometry(0.5,0.65,20);ringGeo.rotateX(-Math.PI/2);
   const ringMat=new THREE.MeshBasicMaterial({color:0xff3333,transparent:true,opacity:0.5,side:THREE.DoubleSide});
   const ring=new THREE.Mesh(ringGeo,ringMat);ring.position.y=0.03;g.add(ring);
