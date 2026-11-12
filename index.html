@@ -1159,7 +1159,7 @@ function buildWorld(){
 
 function makeSurvivorMesh(){
   const g=new THREE.Group();
-  const fabric=new THREE.MeshStandardMaterial({color:0x425d70,roughness:0.94});
+  const fabric=new THREE.MeshStandardMaterial({color:0x425d70,roughness:0.94});fabric.skinning=true;
   const dark=new THREE.MeshStandardMaterial({color:0x202c35,roughness:0.98});
   const denim=new THREE.MeshStandardMaterial({color:0x263746,roughness:0.92});
   const skin=new THREE.MeshStandardMaterial({color:0xb98c70,roughness:0.86});
@@ -1175,7 +1175,7 @@ function makeSurvivorMesh(){
   }
   bodyGeo.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(skinIndices,4));
   bodyGeo.setAttribute('skinWeight',new THREE.Float32BufferAttribute(skinWeights,4));
-  const body=new THREE.SkinnedMesh(bodyGeo,fabric);body.position.y=0.02;body.castShadow=true;body.receiveShadow=true;bodyPivot.add(body);
+  const body=new THREE.SkinnedMesh(bodyGeo,fabric);body.position.y=0.02;body.castShadow=true;body.receiveShadow=true;body.frustumCulled=false;bodyPivot.add(body);
   const pelvisBone=new THREE.Bone();pelvisBone.name='survivor_pelvis';pelvisBone.position.set(0,-0.44,0);bodyPivot.add(pelvisBone);
   const spineBone=new THREE.Bone();spineBone.name='survivor_spine';spineBone.position.y=0.42;pelvisBone.add(spineBone);
   const chestBone=new THREE.Bone();chestBone.name='survivor_chest';chestBone.position.y=0.36;spineBone.add(chestBone);
@@ -1268,13 +1268,25 @@ function makeFirstPersonRepairRig(){
 
 function makeKillerMesh(){
   const g=new THREE.Group();
-  const coat=new THREE.MeshStandardMaterial({color:0x20191a,roughness:0.98});
+  const coat=new THREE.MeshStandardMaterial({color:0x20191a,roughness:0.98});coat.skinning=true;
   const edge=new THREE.MeshStandardMaterial({color:0x493334,roughness:0.9});
   const leather=new THREE.MeshStandardMaterial({color:0x171314,roughness:0.92});
   const maskMat=new THREE.MeshStandardMaterial({color:0xb7b0a0,roughness:0.75});
   const metal=new THREE.MeshStandardMaterial({color:0x777d82,metalness:0.82,roughness:0.32});
   const bodyPivot=new THREE.Group();bodyPivot.position.y=1.15;g.add(bodyPivot);
-  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.36,0.43,1.18,12),coat);body.position.y=0.08;body.castShadow=true;bodyPivot.add(body);
+  const bodyGeo=new THREE.CylinderGeometry(0.36,0.43,1.18,12,12);
+  const skinIndices=[],skinWeights=[];
+  for(let i=0;i<bodyGeo.attributes.position.count;i++){
+    const y=bodyGeo.attributes.position.getY(i);
+    if(y<0){const t=THREE.MathUtils.clamp((y+0.59)/0.59,0,1);skinIndices.push(0,1,2,0);skinWeights.push(1-t,t,0,0);}
+    else {const t=THREE.MathUtils.clamp(y/0.59,0,1);skinIndices.push(0,1,2,0);skinWeights.push(0,1-t,t,0);}
+  }
+  bodyGeo.setAttribute('skinIndex',new THREE.Uint16BufferAttribute(skinIndices,4));
+  bodyGeo.setAttribute('skinWeight',new THREE.Float32BufferAttribute(skinWeights,4));
+  const body=new THREE.SkinnedMesh(bodyGeo,coat);body.position.y=0.08;body.castShadow=true;body.receiveShadow=true;body.frustumCulled=false;bodyPivot.add(body);
+  const pelvisBone=new THREE.Bone();pelvisBone.name='killer_pelvis';pelvisBone.position.set(0,-0.57,0);bodyPivot.add(pelvisBone);
+  const spineBone=new THREE.Bone();spineBone.name='killer_spine';spineBone.position.y=0.52;pelvisBone.add(spineBone);
+  const chestBone=new THREE.Bone();chestBone.name='killer_chest';chestBone.position.y=0.48;spineBone.add(chestBone);
   const apron=new THREE.Mesh(new THREE.BoxGeometry(0.56,0.82,0.12),leather);apron.position.set(0,-0.1,0.29);bodyPivot.add(apron);
   const panel=new THREE.Mesh(new THREE.BoxGeometry(0.66,0.7,0.08),edge);panel.position.set(0,-0.02,0.22);bodyPivot.add(panel);
   for(const side of [-1,1]){const strap=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.92,0.08),leather);strap.position.set(side*0.2,0.02,0.25);bodyPivot.add(strap);}
@@ -1285,31 +1297,33 @@ function makeKillerMesh(){
   const eyeMat=new THREE.MeshBasicMaterial({color:0xff2424});
   for(const x of [-0.075,0.075]){const eye=new THREE.Mesh(new THREE.SphereGeometry(0.035,8,8),eyeMat);eye.position.set(x,0.01,0.25);headPivot.add(eye);}
   function arm(side,weapon){
-    const upper=new THREE.Group();upper.position.set(side*0.42,1.72,0);g.add(upper);
+    const upper=new THREE.Bone();upper.name=side<0?'killer_left_upper_arm':'killer_right_upper_arm';upper.position.set(side*0.42,1.72,0);g.add(upper);
     const shoulder=new THREE.Mesh(new THREE.SphereGeometry(0.16,10,8),edge);upper.add(shoulder);
     const sleeve=new THREE.Mesh(new THREE.CylinderGeometry(0.105,0.12,0.42,10),coat);sleeve.position.y=-0.2;upper.add(sleeve);
-    const elbow=new THREE.Group();elbow.position.y=-0.4;upper.add(elbow);
+    const elbow=new THREE.Bone();elbow.name=side<0?'killer_left_elbow':'killer_right_elbow';elbow.position.y=-0.4;upper.add(elbow);
     const forearm=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.095,0.36,10),leather);forearm.position.y=-0.17;elbow.add(forearm);
-    const hand=new THREE.Group();hand.position.set(0,-0.39,0.02);elbow.add(hand);
+    const hand=new THREE.Bone();hand.name=side<0?'killer_left_hand':'killer_right_hand';hand.position.set(0,-0.39,0.02);elbow.add(hand);
     const palm=new THREE.Mesh(new THREE.BoxGeometry(0.14,0.13,0.1),leather);hand.add(palm);
     for(let i=0;i<4;i++){const finger=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.02,0.1,6),leather);finger.position.set(-0.045+i*0.03,-0.1,0.015);hand.add(finger);}
     let blade=null;if(weapon){blade=new THREE.Group();const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.035,0.04,0.25,8),leather);grip.position.y=-0.12;blade.add(grip);const guard=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.045,0.06),metal);guard.position.y=0.02;blade.add(guard);const edgeBlade=new THREE.Mesh(new THREE.BoxGeometry(0.09,0.72,0.045),metal);edgeBlade.position.set(0,0.4,0.015);blade.add(edgeBlade);hand.add(blade);}
     return{upper,elbow,hand,blade};
   }
   function leg(side){
-    const hip=new THREE.Group();hip.position.set(side*0.19,0.72,0);g.add(hip);
+    const hip=new THREE.Bone();hip.name=side<0?'killer_left_hip':'killer_right_hip';hip.position.set(side*0.19,0.72,0);g.add(hip);
     const thigh=new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.13,0.42,10),leather);thigh.position.y=-0.21;hip.add(thigh);
-    const knee=new THREE.Group();knee.position.y=-0.42;hip.add(knee);
+    const knee=new THREE.Bone();knee.name=side<0?'killer_left_knee':'killer_right_knee';knee.position.y=-0.42;hip.add(knee);
     const pad=new THREE.Mesh(new THREE.SphereGeometry(0.12,8,8),edge);knee.add(pad);
     const shin=new THREE.Mesh(new THREE.CylinderGeometry(0.095,0.12,0.4,10),leather);shin.position.y=-0.2;knee.add(shin);
     const boot=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.15,0.34),coat);boot.position.set(0,-0.42,0.07);knee.add(boot);
     return{hip,knee};
   }
   const l=arm(-1,false),r=arm(1,true),ll=leg(-1),rr=leg(1);
+  const killerSkeleton=new THREE.Skeleton([pelvisBone,spineBone,chestBone,l.upper,l.elbow,l.hand,r.upper,r.elbow,r.hand,ll.hip,ll.knee,rr.hip,rr.knee]);
+  g.updateMatrixWorld(true);body.bind(killerSkeleton);
   const ringGeo=new THREE.RingGeometry(0.5,0.65,20);ringGeo.rotateX(-Math.PI/2);
   const ringMat=new THREE.MeshBasicMaterial({color:0xff3333,transparent:true,opacity:0.5,side:THREE.DoubleSide});
   const ring=new THREE.Mesh(ringGeo,ringMat);ring.position.y=0.03;g.add(ring);
-  g.userData={lArm:l.upper,rArm:r.upper,lElbow:l.elbow,rElbow:r.elbow,lHand:l.hand,rHand:r.hand,blade:r.blade,lLeg:ll.hip,rLeg:rr.hip,lKnee:ll.knee,rKnee:rr.knee,body,bodyPivot,head,headPivot,ringMat};
+  g.userData={lArm:l.upper,rArm:r.upper,lElbow:l.elbow,rElbow:r.elbow,lHand:l.hand,rHand:r.hand,blade:r.blade,lLeg:ll.hip,rLeg:rr.hip,lKnee:ll.knee,rKnee:rr.knee,body,bodyPivot,head,headPivot,ringMat,skeleton:killerSkeleton,spineBone,chestBone};
   return g;
 }
 
@@ -2404,6 +2418,8 @@ function sync3D(dt){
   if (ku.rArm) ku.rArm.rotation.x = -kSwing;
   if (ku.lElbow) ku.lElbow.rotation.x = killer.walkPhase>0?0.12:0;
   if (ku.rElbow) ku.rElbow.rotation.x = killer.walkPhase>0?0.12:0;
+  if(ku.spineBone)ku.spineBone.rotation.x=killer.state==='breaking'?-0.14:(killer.isMoving?Math.sin(killer.walkPhase*2)*0.025:0);
+  if(ku.chestBone)ku.chestBone.rotation.z=killer.state==='stunned'?Math.sin(performance.now()/170)*0.045:0;
   if (ku.lLeg) ku.lLeg.rotation.x = -kSwing;
   if (ku.rLeg) ku.rLeg.rotation.x = kSwing;
   if (ku.lKnee) ku.lKnee.rotation.x = Math.max(0,-kSwing)*0.35;
