@@ -779,11 +779,26 @@ function initThree(){
   const colors = [];
   const pos = groundGeo.attributes.position;
   for (let i = 0; i < pos.count; i++){
-    const v = 0.15 + Math.random() * 0.1;
-    colors.push(v * 0.55, v * 1.15, v * 0.55);
+    const v = 0.28 + Math.random() * 0.08;
+    pos.setY(i,Math.sin(pos.getX(i)*0.7)*0.012+Math.cos(pos.getZ(i)*0.55)*0.01+(Math.random()-0.5)*0.012);
+    colors.push(v * 0.72, v * 1.05, v * 0.62);
   }
+  groundGeo.attributes.position.needsUpdate=true;groundGeo.computeVertexNormals();
   groundGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-  const floor = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({vertexColors:true, roughness:1}));
+  const groundCanvas=document.createElement('canvas');groundCanvas.width=512;groundCanvas.height=512;
+  const groundCtx=groundCanvas.getContext('2d');groundCtx.fillStyle='#b9b38a';groundCtx.fillRect(0,0,512,512);
+  for(let i=0;i<4200;i++){
+    const x=Math.random()*512,y=Math.random()*512,r=0.5+Math.random()*3;
+    groundCtx.fillStyle=i%5===0?'rgba(52,63,39,0.24)':(i%3===0?'rgba(83,65,42,0.18)':'rgba(224,213,160,0.16)');
+    groundCtx.beginPath();groundCtx.ellipse(x,y,r*1.8,r,Math.random()*Math.PI,0,Math.PI*2);groundCtx.fill();
+  }
+  for(let i=0;i<80;i++){
+    const x=Math.random()*512,y=Math.random()*512;
+    groundCtx.fillStyle='rgba(48,58,35,0.22)';groundCtx.beginPath();groundCtx.ellipse(x,y,5+Math.random()*12,3+Math.random()*7,Math.random()*Math.PI,0,Math.PI*2);groundCtx.fill();
+  }
+  const groundTexture=new THREE.CanvasTexture(groundCanvas);
+  groundTexture.wrapS=groundTexture.wrapT=THREE.RepeatWrapping;groundTexture.repeat.set(12,8);groundTexture.anisotropy=4;
+  const floor = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({map:groundTexture,vertexColors:true,roughness:1}));
   floor.receiveShadow = true;
   floor.position.set(PX(1200), 0, PX(800));
   scene.add(floor);
@@ -826,15 +841,26 @@ function wallMat(){
 function woodMat(){ return new THREE.MeshStandardMaterial({color:0xa07a40, roughness:0.85}); }
 function metalMat(){ return new THREE.MeshStandardMaterial({color:0x6a7a8a, roughness:0.4, metalness:0.7}); }
 function makeTree(r){
-  const g = new THREE.Group();
-  const trunkH = r * 1.5;
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(r*0.15, r*0.25, trunkH, 6), new THREE.MeshStandardMaterial({color:0x3a2510, roughness:1}));
-  trunk.position.y = trunkH/2; trunk.castShadow = true; trunk.receiveShadow = true; g.add(trunk);
-  const fMat = new THREE.MeshStandardMaterial({color:0x2a5a3a, roughness:0.95});
-  const c1 = new THREE.Mesh(new THREE.ConeGeometry(r*0.9, r*1.2, 8), fMat);
-  c1.position.y = trunkH + r*0.3; c1.castShadow = true; g.add(c1);
-  const c2 = new THREE.Mesh(new THREE.ConeGeometry(r*0.7, r*1.0, 8), fMat.clone());
-  c2.material.color.setHex(0x3a7a4a); c2.position.y = trunkH + r*0.9; c2.castShadow = true; g.add(c2);
+  const g=new THREE.Group(),trunkH=r*1.55;
+  const bark=new THREE.MeshStandardMaterial({color:0x332317,roughness:1});
+  const trunk=new THREE.Mesh(new THREE.CylinderGeometry(r*0.13,r*0.23,trunkH,7),bark);
+  trunk.position.y=trunkH/2;trunk.castShadow=true;trunk.receiveShadow=true;g.add(trunk);
+  const branchMat=new THREE.MeshStandardMaterial({color:0x3d2b1d,roughness:1});
+  for(let i=0;i<4;i++){
+    const branch=new THREE.Mesh(new THREE.CylinderGeometry(r*0.035,r*0.065,r*0.72,5),branchMat);
+    branch.position.set(Math.cos(i*Math.PI/2)*r*0.25,trunkH*0.62,Math.sin(i*Math.PI/2)*r*0.25);
+    branch.rotation.z=(i%2?1:-1)*0.62;branch.rotation.x=Math.sin(i*2)*0.35;g.add(branch);
+  }
+  const greens=[0x203d2b,0x294b32,0x34583a,0x3d6440];
+  for(let layer=0;layer<3;layer++){
+    const foliage=new THREE.Mesh(new THREE.ConeGeometry(r*(0.98-layer*0.18),r*(1.08-layer*0.08),9),new THREE.MeshStandardMaterial({color:greens[layer],roughness:0.98,flatShading:true}));
+    foliage.position.y=trunkH+r*(0.25+layer*0.58);foliage.rotation.y=layer*0.42;foliage.castShadow=true;g.add(foliage);
+  }
+  for(let i=0;i<4;i++){
+    const cluster=new THREE.Mesh(new THREE.IcosahedronGeometry(r*0.34,1),new THREE.MeshStandardMaterial({color:greens[(i+1)%greens.length],roughness:1,flatShading:true}));
+    const a=i*Math.PI/2;cluster.position.set(Math.cos(a)*r*0.52,trunkH+r*0.8+Math.sin(i*2)*r*0.1,Math.sin(a)*r*0.52);
+    cluster.scale.y=0.82;cluster.castShadow=true;g.add(cluster);
+  }
   return g;
 }
 function makeRock(r){
