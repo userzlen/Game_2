@@ -834,8 +834,10 @@ function makeBush(r){
 // generator, pallet, window or another prop, move it to the nearest free grid point.
 function sanitizeDecorLayout(){
   const blocked = (x,y,r,index) => {
-    if (x < r+35 || x > 2400-r-35 || y < r+35 || y > 1600-r-35) return true;
-    for (const w of walls) if (circleRect(x,y,r+8,w.x,w.y,w.w,w.h)) return true;
+    if (x < r+55 || x > 2400-r-55 || y < r+55 || y > 1600-r-55) return true;
+    // Keep scenery away from both player spawn points and the map exits.
+    if (Math.hypot(x-150,y-150) < r+95 || Math.hypot(x-2250,y-1450) < r+95) return true;
+    for (const w of walls) if (circleRect(x,y,r+12,w.x,w.y,w.w,w.h)) return true;
     for (const gen of generators) if (Math.hypot(x-gen.x,y-gen.y) < r+68) return true;
     if (!totem.broken && Math.hypot(x-totem.x,y-totem.y) < r+34) return true;
     for (const p of pallets) if (Math.hypot(x-p.x,y-p.y) < r+72) return true;
@@ -989,9 +991,33 @@ function buildWorld(){
     const leverGrip=new THREE.Mesh(new THREE.SphereGeometry(0.065,8,8),rubber);
     leverGrip.position.set(0.055,0.36,0);leverPivot.add(leverGrip);
 
+    // Exposed gearbox, cable brackets and a moving repair linkage.
+    const gearPivot=new THREE.Group();gearPivot.position.set(-0.58,0.48,0.43);g.add(gearPivot);
+    const gear=new THREE.Mesh(new THREE.TorusGeometry(0.16,0.035,8,18),steel);
+    gear.rotation.x=Math.PI/2;gearPivot.add(gear);
+    const gearHub=new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.055,0.12,10),copper);
+    gearHub.rotation.x=Math.PI/2;gearPivot.add(gearHub);
+    for(let tooth=0;tooth<8;tooth++){
+      const a=tooth*Math.PI/4;
+      const pin=new THREE.Mesh(new THREE.BoxGeometry(0.055,0.07,0.07),steel);
+      pin.position.set(Math.cos(a)*0.17,Math.sin(a)*0.17,0);gearPivot.add(pin);
+    }
+    const linkagePivot=new THREE.Group();linkagePivot.position.set(0.62,0.52,-0.42);g.add(linkagePivot);
+    const linkage=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,0.42,8),copper);
+    linkage.position.y=0.20;linkage.rotation.z=-0.42;linkagePivot.add(linkage);
+    const linkageJoint=new THREE.Mesh(new THREE.SphereGeometry(0.065,8,8),steel);
+    linkageJoint.position.set(0.08,0.39,0);linkagePivot.add(linkageJoint);
+    const sparkMat=new THREE.MeshBasicMaterial({color:0xffc36a,transparent:true,opacity:0.0});
+    const sparkGroup=new THREE.Group();sparkGroup.position.set(0.48,0.42,0.52);g.add(sparkGroup);
+    for(let spark=0;spark<5;spark++){
+      const streak=new THREE.Mesh(new THREE.BoxGeometry(0.018,0.16,0.018),sparkMat);
+      streak.rotation.z=spark*Math.PI/5;sparkGroup.add(streak);
+    }
+
     const pl=new THREE.PointLight(0xffa044,0.25,4);pl.position.set(0.3,1.1,0.6);g.add(pl);
+    const sparkLight=new THREE.PointLight(0xffa044,0,1.8);sparkLight.position.set(0.48,0.48,0.58);g.add(sparkLight);
     g.position.set(PX(gen.x),0,PX(gen.y));scene.add(g);
-    generatorMeshes.push({group:g,gen,lights,bar,pointLight:pl,fanPivot,pistonGroup,needle,coil,flywheelPivot,leverPivot,repairPhase:Math.random()*6});
+    generatorMeshes.push({group:g,gen,lights,bar,pointLight:pl,fanPivot,pistonGroup,needle,coil,flywheelPivot,leverPivot,gearPivot,linkagePivot,sparkGroup,sparkMat,sparkLight,repairPhase:Math.random()*6});
   }
   const tg = new THREE.Group();
   const boneMat = new THREE.MeshStandardMaterial({color:0x8a7a5a, roughness:0.9});
@@ -1109,27 +1135,42 @@ function makeSurvivorMesh(){
 
 function makeFirstPersonRepairRig(){
   const group=new THREE.Group();
-  group.position.set(0,-0.28,-0.72);
+  group.position.set(0,-0.25,-0.68);
   const sleeveMat=new THREE.MeshStandardMaterial({color:0x4a7090,roughness:0.82});
+  const seamMat=new THREE.MeshStandardMaterial({color:0x263c4e,roughness:0.9});
   const gloveMat=new THREE.MeshStandardMaterial({color:0x24282b,roughness:0.9});
   const metalMat=new THREE.MeshStandardMaterial({color:0x9aa5ad,roughness:0.32,metalness:0.82});
   function makeArm(side){
-    const upper=new THREE.Group();upper.position.set(side*0.34,0,0);
-    const upperBone=new THREE.Mesh(new THREE.CylinderGeometry(0.085,0.105,0.34,8),sleeveMat);
-    upperBone.position.y=-0.17;upper.add(upperBone);
-    const elbow=new THREE.Group();elbow.position.y=-0.32;upper.add(elbow);
-    const forearm=new THREE.Mesh(new THREE.CylinderGeometry(0.065,0.085,0.32,8),sleeveMat);
-    forearm.position.y=-0.15;elbow.add(forearm);
-    const hand=new THREE.Mesh(new THREE.SphereGeometry(0.08,8,8),gloveMat);
-    hand.position.set(0,-0.31,0.035);elbow.add(hand);
+    const upper=new THREE.Group();upper.position.set(side*0.38,-0.02,0);
+    const shoulder=new THREE.Mesh(new THREE.SphereGeometry(0.105,10,8),sleeveMat);upper.add(shoulder);
+    const upperBone=new THREE.Mesh(new THREE.CylinderGeometry(0.085,0.105,0.36,10),sleeveMat);
+    upperBone.position.y=-0.18;upperBone.castShadow=true;upper.add(upperBone);
+    const cuff=new THREE.Mesh(new THREE.CylinderGeometry(0.087,0.087,0.055,10),seamMat);
+    cuff.position.y=-0.34;upper.add(cuff);
+    const elbow=new THREE.Group();elbow.position.y=-0.35;upper.add(elbow);
+    const forearm=new THREE.Mesh(new THREE.CylinderGeometry(0.065,0.085,0.34,10),sleeveMat);
+    forearm.position.y=-0.16;forearm.castShadow=true;elbow.add(forearm);
+    const wrist=new THREE.Group();wrist.position.set(0,-0.32,0.02);elbow.add(wrist);
+    const glove=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.13,0.12),gloveMat);glove.position.y=-0.025;wrist.add(glove);
+    const fingers=[];
+    for(let f=0;f<4;f++){
+      const finger=new THREE.Group();finger.position.set((f-1.5)*0.034,-0.085,0.035);wrist.add(finger);
+      const segment=new THREE.Mesh(new THREE.CylinderGeometry(0.014,0.017,0.085,6),gloveMat);
+      segment.position.y=-0.04;finger.add(segment);
+      const tip=new THREE.Mesh(new THREE.SphereGeometry(0.016,6,6),gloveMat);tip.position.y=-0.083;finger.add(tip);
+      fingers.push(finger);
+    }
+    const thumb=new THREE.Group();thumb.position.set(side*0.07,-0.025,0.035);thumb.rotation.z=side*0.55;wrist.add(thumb);
+    const thumbMesh=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.02,0.075,6),gloveMat);thumbMesh.position.y=-0.035;thumb.add(thumbMesh);
     const tool=new THREE.Group();
-    const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.022,0.27,8),gloveMat);
+    const handle=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.022,0.29,8),gloveMat);
     handle.position.set(0,-0.02,-0.10);handle.rotation.x=Math.PI/2;tool.add(handle);
-    const head=new THREE.Mesh(new THREE.TorusGeometry(0.065,0.016,6,12,Math.PI*1.35),metalMat);
+    const head=new THREE.Mesh(new THREE.TorusGeometry(0.068,0.018,7,14,Math.PI*1.35),metalMat);
     head.position.set(0,0.10,-0.10);head.rotation.x=Math.PI/2;tool.add(head);
-    hand.add(tool);
+    const toolCore=new THREE.Mesh(new THREE.BoxGeometry(0.055,0.055,0.08),metalMat);toolCore.position.set(0,0.10,-0.10);tool.add(toolCore);
+    wrist.add(tool);
     group.add(upper);
-    return {upper,elbow,hand,tool};
+    return {upper,elbow,wrist,hand:wrist,tool,fingers,thumb};
   }
   const left=makeArm(-1),right=makeArm(1);
   return {group,left,right};
@@ -2175,15 +2216,22 @@ function sync3D(dt){
       const cycle=performance.now()/1000*8.4;
       const pulse=Math.max(0,Math.sin(cycle*2));
       const {left,right}=firstPersonRepairRig;
-      left.upper.rotation.x=1.02+Math.sin(cycle)*0.08;
-      right.upper.rotation.x=0.94+Math.sin(cycle+0.8)*0.16;
-      left.upper.rotation.z=-0.12+Math.sin(cycle)*0.025;
-      right.upper.rotation.z=0.12+Math.sin(cycle)*0.035;
-      left.elbow.rotation.x=0.55+pulse*0.18;
-      right.elbow.rotation.x=0.62-pulse*0.22;
-      left.hand.rotation.x=0.12+Math.sin(cycle*2)*0.08;
-      right.hand.rotation.x=-0.18-Math.sin(cycle*2+0.5)*0.12;
-      right.tool.rotation.z=Math.sin(cycle*2)*0.22;
+      left.upper.rotation.x=0.92+Math.sin(cycle)*0.10;
+      right.upper.rotation.x=0.86+Math.sin(cycle+0.8)*0.18;
+      left.upper.rotation.z=-0.15+Math.sin(cycle)*0.035;
+      right.upper.rotation.z=0.15+Math.sin(cycle)*0.045;
+      left.elbow.rotation.x=0.62+pulse*0.22;
+      right.elbow.rotation.x=0.70-pulse*0.26;
+      left.wrist.rotation.x=0.18+Math.sin(cycle*2)*0.11;
+      right.wrist.rotation.x=-0.22-Math.sin(cycle*2+0.5)*0.15;
+      left.wrist.rotation.z=-0.08+Math.sin(cycle)*0.06;
+      right.wrist.rotation.z=0.12+Math.sin(cycle+0.5)*0.08;
+      left.fingers.forEach((finger,i)=>{finger.rotation.x=0.12+Math.sin(cycle*2+i*0.35)*0.10;});
+      right.fingers.forEach((finger,i)=>{finger.rotation.x=0.18+Math.sin(cycle*2+0.7+i*0.3)*0.13;});
+      left.thumb.rotation.z=-0.45+Math.sin(cycle)*0.08;
+      right.thumb.rotation.z=0.45+Math.sin(cycle+0.4)*0.10;
+      right.tool.rotation.z=Math.sin(cycle*2)*0.26;
+      right.tool.rotation.x=0.08+Math.sin(cycle*2+0.4)*0.12;
     }
   }
 
@@ -2318,6 +2366,14 @@ function sync3D(dt){
     gm.pistonGroup.position.y=0.55+Math.sin(animT*(activeRepair?13:4))*(activeRepair?0.075:0.025);
     if(gm.flywheelPivot)gm.flywheelPivot.rotation.z+=g.done?0.025:(activeRepair?0.22:0.07);
     if(gm.leverPivot)gm.leverPivot.rotation.z=activeRepair?Math.sin(animT*8)*0.16:Math.sin(animT*2)*0.025;
+    if(gm.gearPivot)gm.gearPivot.rotation.z+=activeRepair?0.16:0.035;
+    if(gm.linkagePivot)gm.linkagePivot.rotation.z=activeRepair?Math.sin(animT*11)*0.24:Math.sin(animT*3)*0.035;
+    if(gm.sparkMat){
+      const sparkPulse=activeRepair?Math.max(0,Math.sin(animT*17))*0.8:0;
+      gm.sparkMat.opacity=sparkPulse;
+      gm.sparkGroup.rotation.z=animT*1.8;
+      gm.sparkLight.intensity=sparkPulse*0.9;
+    }
     gm.needle.rotation.z=-0.45+pct*0.8+Math.sin(animT*2)*0.04;
     gm.coil.material.emissive.setHex(activeRepair?0x3a1608:0x000000);
     for (let i=0;i<3;i++){
