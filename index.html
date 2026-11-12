@@ -295,7 +295,7 @@ const MP = {
   active: false, role: null, myRole: null, roomCode: null, roomId: null,
   conn: null, pc: null, connReady: false, connected: false,
   lastSendStateTime: 0, lastSendInputTime: 0, stateHz: 20, inputHz: 20,
-  remoteInput: null, remoteState: null, pollTimer: null, pollBusy: false,
+  remoteInput: null, remoteState: null, remotePrevSpace:false, pollTimer: null, pollBusy: false,
   lastSignalId: 0, pendingIce: [], offerStarted: false, onConnected: null,
 };
 
@@ -2848,7 +2848,7 @@ function resetGame(){
   smokeClouds.length=0; bloodTrail.length=0; traps.length=0; hatchets.length=0;
   screenShake=0; costMap=null;
 
-  game.time=0;
+  game.time=0;MP.remotePrevSpace=false;
   game.hint = playerRole === 'survivor' ? 'Починить 3 генератора и сбежать!' : 'Найди выжившего и поймай!';
   game.hintTime=6;
 }
@@ -2912,7 +2912,7 @@ function loop(now){
       const fEdge = pInput.f && !prevF;
       prevSpace = pInput.space; prevE = pInput.e; prevF = pInput.f;
 
-      let guestInput = null;
+      let guestInput = null, guestSpaceEdge = false;
       if (MP.active && MP.role === 'host' && MP.remoteInput) {
         const ri = MP.remoteInput;
         guestInput = {
@@ -2920,6 +2920,8 @@ function loop(now){
           space: !!ri.space, e: !!ri.e, f: !!ri.f,
           attack: !!ri.attack,
         };
+        guestSpaceEdge=!!guestInput.space&&!MP.remotePrevSpace;
+        MP.remotePrevSpace=!!guestInput.space;
         const guestRole = MP.myRole === 'survivor' ? 'killer' : 'survivor';
         const gt = guestRole === 'survivor' ? survivor : killer;
         if (ri.yawDelta) gt.facing += ri.yawDelta;
@@ -2934,7 +2936,7 @@ function loop(now){
         if(selectedItem==='flashlight')updateFlashlight(dt,pInput.f);else if(fEdge)tryUseItem();
         if (MP.active && MP.role === 'host' && guestInput) {
           updateKillerPlayer(dt, guestInput);
-          if (guestInput.space) killerUseAbility();
+          if (guestSpaceEdge) killerUseAbility();
         } else {
           updateKillerAI(dt);
         }
@@ -2943,12 +2945,12 @@ function loop(now){
         if (spaceEdge) killerUseAbility();
         if (MP.active && MP.role === 'host' && guestInput) {
           updateSurvivorInput(dt, guestInput);
-          if (guestInput.space) tryAbility();
+          if (guestSpaceEdge) tryAbility();
           if(selectedItem==='flashlight')updateFlashlight(dt,guestInput.f);else if(guestInput.f)tryUseItem();
           if (guestInput.e) {
             if (!survivor.repairing) tryInteractSingle();
             tryInteractHold(guestInput,dt);
-          } else { survivor.repairing = null; }
+          } else { survivor.repairing = null; survivor.repairTimer=0; }
         } else {
           updateSurvivorAI(dt);
         }
