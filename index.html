@@ -1279,7 +1279,7 @@ function makeSurvivorMesh(){
   const g=new THREE.Group();
   const fabric=new THREE.MeshStandardMaterial({color:0x425d70,roughness:0.94});fabric.skinning=true;
   const dark=new THREE.MeshStandardMaterial({color:0x202c35,roughness:0.98});
-  const denim=new THREE.MeshStandardMaterial({color:0x263746,roughness:0.92});
+  const denim=new THREE.MeshStandardMaterial({color:0x263746,roughness:0.92});denim.skinning=true;
   const skin=new THREE.MeshStandardMaterial({color:0xb98c70,roughness:0.86});
   const leather=new THREE.MeshStandardMaterial({color:0x30251f,roughness:0.92});
   const metal=new THREE.MeshStandardMaterial({color:0x77838a,metalness:0.55,roughness:0.48});
@@ -1394,7 +1394,7 @@ function makeKillerMesh(){
   const g=new THREE.Group();
   const coat=new THREE.MeshStandardMaterial({color:0x20191a,roughness:0.98});coat.skinning=true;
   const edge=new THREE.MeshStandardMaterial({color:0x493334,roughness:0.9});
-  const leather=new THREE.MeshStandardMaterial({color:0x171314,roughness:0.92});
+  const leather=new THREE.MeshStandardMaterial({color:0x171314,roughness:0.92});leather.skinning=true;
   const maskMat=new THREE.MeshStandardMaterial({color:0xb7b0a0,roughness:0.75});
   const metal=new THREE.MeshStandardMaterial({color:0x777d82,metalness:0.82,roughness:0.32});
   const bodyPivot=new THREE.Group();bodyPivot.position.y=1.15;g.add(bodyPivot);
