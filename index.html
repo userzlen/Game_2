@@ -1031,7 +1031,7 @@ function sanitizeDecorLayout(){
     // Check every other prop, not only earlier array entries. This prevents later
     // relocations from putting a tree back into a narrow route or another prop.
     for (let i=0;i<decor.length;i++){
-      if(i===index) continue;
+      if(i===index || decor[i].hidden) continue;
       const other=decor[i],otherClearance=clearanceFor(other.r,other.type);
       if(Math.hypot(x-other.x,y-other.y)<clearance+otherClearance) return true;
     }
@@ -1053,24 +1053,40 @@ function sanitizeDecorLayout(){
         }
       }
     }
-    if(!placed) log('Декор скрыт: не найдено безопасное место '+d.type+' '+index);
+    if(!placed){d.hidden=true;log('Декор скрыт: не найдено безопасное место '+d.type+' '+index);}
   });
 }
 
 function buildWorld(){
   sanitizeDecorLayout();
+  const wallBoards=[
+    new THREE.MeshStandardMaterial({color:0x77756d,roughness:0.94}),
+    new THREE.MeshStandardMaterial({color:0x817e74,roughness:0.94}),
+    new THREE.MeshStandardMaterial({color:0x6f706b,roughness:0.96})
+  ];
   for (const w of walls){
     const m = new THREE.Mesh(new THREE.BoxGeometry(PX(w.w), 2.65, PX(w.h)), wallMat());
     m.position.set(PX(w.x + w.w/2), 1.325, PX(w.y + w.h/2));
     m.castShadow = true; m.receiveShadow = true; scene.add(m);
-    const alongX=w.w>=w.h, length=PX(alongX?w.w:w.h), cx=PX(w.x+w.w/2), cz=PX(w.y+w.h/2);
+    const alongX=w.w>=w.h, length=PX(alongX?w.w:w.h), depth=PX(alongX?w.h:w.w), cx=PX(w.x+w.w/2), cz=PX(w.y+w.h/2);
     const trim=woodMat();
     for(const side of [-1,1]){
+      const faceOffset=depth/2+0.035;
+      // Horizontal siding makes each maze wall read as a built structure, not a flat slab.
+      for(let row=0;row<5;row++){
+        const board=new THREE.Mesh(
+          new THREE.BoxGeometry(alongX?Math.max(0.2,length-0.16):0.075,0.31,alongX?0.075:Math.max(0.2,length-0.16)),
+          wallBoards[(row+Math.round(w.x/20)+Math.round(w.y/20))%wallBoards.length]
+        );
+        const y=0.42+row*0.43;
+        board.position.set(alongX?cx:cx+side*faceOffset,y,alongX?cz+side*faceOffset:cz);
+        board.castShadow=true;board.receiveShadow=true;scene.add(board);
+      }
       const rail=new THREE.Mesh(new THREE.BoxGeometry(alongX?length:0.13,0.13,alongX?0.13:length),trim);
-      rail.position.set(cx,2.52,cz+(alongX?side*0.23:0));if(!alongX)rail.position.set(cx+side*0.23,2.52,cz);
+      rail.position.set(cx,2.52,cz+(alongX?side*(depth/2+0.10):0));if(!alongX)rail.position.set(cx+side*(depth/2+0.10),2.52,cz);
       rail.castShadow=true;scene.add(rail);
       const lower=new THREE.Mesh(new THREE.BoxGeometry(alongX?length:0.10,0.09,alongX?0.10:length),trim);
-      lower.position.set(cx,0.12,cz+(alongX?side*0.23:0));if(!alongX)lower.position.set(cx+side*0.23,0.12,cz);
+      lower.position.set(cx,0.12,cz+(alongX?side*(depth/2+0.10):0));if(!alongX)lower.position.set(cx+side*(depth/2+0.10),0.12,cz);
       lower.castShadow=true;scene.add(lower);
     }
     const postCount=Math.max(2,Math.floor(length/2.4));
@@ -1329,6 +1345,7 @@ function buildWorld(){
     exitMeshes.push({group:g, exit:e, door, doorMat:dMat, pointLight:pl});
   }
   for (const d of decor){
+    if(d.hidden) continue;
     let m; const r = PX(d.r);
     if (d.type === 'tree') m = makeTree(r);
     else if (d.type === 'rock') m = makeRock(r);
