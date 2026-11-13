@@ -676,7 +676,7 @@ function broadcastState(){
       vaultDuration: survivor.vaultDuration, walkPhase: survivor.walkPhase,
       invisibleTimer: survivor.invisibleTimer, speedBoostTimer: survivor.speedBoostTimer,
       hitCooldown: survivor.hitCooldown, abilityCooldown: survivor.abilityCooldown,
-      itemCooldown: survivor.itemCooldown,itemUsed:!!survivor.itemUsed,
+      itemCooldown: survivor.itemCooldown,itemUsed:!!survivor.itemUsed,medkitEquipped:!!survivor.medkitEquipped,medkitSpent:!!survivor.medkitSpent,
       repairingGenerator: survivor.repairing && survivor.repairing.type === 'gen' ? generators.indexOf(survivor.repairing.ref) : -1,
       flashlightActive:survivor.flashlightActive,flashlightCharge:survivor.flashlightCharge,
       downedTimer:survivor.downedTimer,hookStage:survivor.hookStage,hookedTimer:survivor.hookedTimer,hookIndex:survivor.hookIndex,
@@ -736,7 +736,7 @@ function applyStateToWorld(state){
   survivor.speedBoostTimer = state.survivor.speedBoostTimer;
   survivor.hitCooldown = state.survivor.hitCooldown;
   survivor.abilityCooldown = state.survivor.abilityCooldown;
-  survivor.itemCooldown = state.survivor.itemCooldown;survivor.itemUsed=!!state.survivor.itemUsed;
+  survivor.itemCooldown = state.survivor.itemCooldown;survivor.itemUsed=!!state.survivor.itemUsed;survivor.medkitEquipped=!!state.survivor.medkitEquipped;survivor.medkitSpent=!!state.survivor.medkitSpent;
   survivor.flashlightActive=!!state.survivor.flashlightActive;survivor.flashlightCharge=state.survivor.flashlightCharge||0;
   survivor.repairing = Number.isInteger(state.survivor.repairingGenerator) && state.survivor.repairingGenerator >= 0 && generators[state.survivor.repairingGenerator] ? {type:'gen',ref:generators[state.survivor.repairingGenerator]} : null;
 
