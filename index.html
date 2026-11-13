@@ -1157,7 +1157,6 @@ function buildWorld(){
       for(let j=0;j<slatCount;j++){
         const z=slatStart+j*slatStep;
         const nail=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.018,0.012,8),ironMat);
-        nail.rotation.x=Math.PI/2;
         nail.position.set(x,0.158,z);
         pivot.add(nail);
       }
