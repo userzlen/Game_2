@@ -1814,7 +1814,7 @@ function killerLOSClear(){
 }
 function computeKillerSpeed(){
   let s = CFG.KILLER_SPEED;
-  if(killer.slowTimer>0)s*=0.62;
+  if(killer.slowTimer>0)s*=0.05;
   if(killer.blindTimer>0)s*=0.82;
   if (killer.hasFast) s *= 1.15;
   if (killer.hasParanoia && Math.hypot(survivor.x-killer.x, survivor.y-killer.y) < 200) s *= 1.3;
@@ -2627,7 +2627,7 @@ function tryUseItem(){
     const ty=survivor.y+Math.sin(survivor.facing)*CFG.SMOKE_THROW;
     smokeClouds.push({x:tx,y:ty,r:CFG.SMOKE_RADIUS,timer:CFG.SMOKE_TIME});
     survivor.itemCooldown=item.cooldown;
-    if (Math.hypot(killer.x-tx,killer.y-ty)<CFG.SMOKE_RADIUS){killer.state='blinded';killer.stunTimer=1.5;killer.path=null;}
+    if (Math.hypot(killer.x-tx,killer.y-ty)<CFG.SMOKE_RADIUS){killer.state='blinded';killer.stunTimer=1.5;killer.slowTimer=4;killer.path=null;}
     game.hint='Дым!'; game.hintTime=1.5;
   } else if (selectedItem==='key'){
     if (!generators.every(g=>g.done)){game.hint='Нужны все генераторы';game.hintTime=1.5;return;}
@@ -3082,7 +3082,6 @@ function drawMapCanvas(){
   for(const g of generators){c.fillStyle=g.done?'#70e69b':'#f3b65e';c.fillRect(g.x*sx-7,g.y*sy-7,14,14);}
   for(const e of exitDoors){c.fillStyle=e.opened?'#77edaa':'#d6dce3';c.fillRect(e.x*sx,e.y*sy,e.w*sx,e.h*sy);}
   c.fillStyle='#75c8ff';c.beginPath();c.arc(survivor.x*sx,survivor.y*sy,8,0,Math.PI*2);c.fill();
-  c.fillStyle='#ff6666';c.beginPath();c.arc(killer.x*sx,killer.y*sy,8,0,Math.PI*2);c.fill();
   c.fillStyle='#d8e5f0';c.font='bold 13px Segoe UI';c.fillText('КАРТА · ГЕНЕРАТОРЫ · ВЫХОДЫ',12,20);
 }
 function updateHUD(){
