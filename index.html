@@ -1019,7 +1019,6 @@ function sanitizeDecorLayout(){
     if (x < r+55 || x > 2400-r-55 || y < r+55 || y > 1600-r-55) return true;
     // Keep scenery away from both player spawn points and the map exits.
     if (Math.hypot(x-150,y-150) < r+95 || Math.hypot(x-2250,y-1450) < r+95) return true;
-    for (const w of walls) if (circleRect(x,y,r+12,w.x,w.y,w.w,w.h)) return true;
     for (const gen of generators) if (Math.hypot(x-gen.x,y-gen.y) < r+68) return true;
     if (!totem.broken && Math.hypot(x-totem.x,y-totem.y) < r+34) return true;
     for (const p of pallets) if (Math.hypot(x-p.x,y-p.y) < r+72) return true;
