@@ -328,7 +328,7 @@ const MP = {
   conn: null, pc: null, connReady: false, connected: false,
   lastSendStateTime: 0, lastSendInputTime: 0, stateHz: 20, inputHz: 20,
   remoteInput: null, remoteState: null, remotePrevSpace:false, pollTimer: null, pollBusy: false,
-  lastSignalId: 0, pendingIce: [], offerStarted: false, onConnected: null,
+  lastSignalId: 0, pendingIce: [], offerStarted: false, onConnected: null, playerName: '', remoteName: '',
 };
 
 const SUPABASE_URL = 'https://wgoqsjqzwtszrwxykvdd.supabase.co';
@@ -3296,7 +3296,13 @@ window.__sp = async () => {
   game.screen = 'menu';
   showRoleSelect();
 };
-window.__mpMenu = async () => { if (MP.active) await cleanupMultiplayer(MP.role === 'host'); showMPMenu(); };
+function showNicknamePrompt(next){
+  screenEl.classList.add('show');
+  screenEl.innerHTML = '<div style="max-width:520px;margin:10vh auto;padding:34px;background:#111519;border:1px solid #765044;text-align:center"><div style="color:#c18c78;letter-spacing:5px">DEAD BY DAYLIGHT</div><h1>ВВЕДИ СВОЙ НИК</h1><p style="color:#aaa">Его будут видеть остальные игроки</p><input id="mpNickInput" maxlength="20" placeholder="ТВОЙ НИК" style="font-size:20px;padding:13px;background:#080a0c;color:white;border:1px solid #9b6455;text-align:center"><div style="margin-top:20px"><button class="btn red" onclick="window.__saveNick(\''+next+'\')">ПРОДОЛЖИТЬ</button></div></div>';
+  setTimeout(()=>document.getElementById('mpNickInput')?.focus(),0);
+}
+window.__saveNick = (next) => { const el=document.getElementById('mpNickInput'); const name=(el?.value||'').trim().replace(/\s+/g,' ').slice(0,20); if(!name){el?.focus();return;} MP.playerName=name; if(next==='join') showMPJoinScreen(window.__pendingRoomCode||''); else showMPMenu(); };
+window.__mpMenu = async () => { if (MP.active) await cleanupMultiplayer(MP.role === 'host'); if(!MP.playerName){showNicknamePrompt('menu');return;} showMPMenu(); };
 
 window.__roleSurvivor = () => { playerRole = 'survivor'; MP.active = false; MP.myRole = 'survivor'; showSurvivorSelect(); };
 window.__roleKiller = () => { playerRole = 'killer'; MP.active = false; MP.myRole = 'killer'; showKillerReveal(); };
@@ -3308,8 +3314,8 @@ window.__toItem = () => showItemSelect();
 window.__toReveal = () => showKillerReveal();
 window.__begin = () => beginPlaying();
 
-window.__mpHostSelect = () => showMPHostSelect();
-window.__mpJoinScreen = () => showMPJoinScreen();
+window.__mpHostSelect = () => { if(!MP.playerName){showNicknamePrompt('menu');return;} showMPHostSelect(); };
+window.__mpJoinScreen = () => { if(!MP.playerName){showNicknamePrompt('join');return;} showMPJoinScreen(); };
 window.__hostAs = async (role) => {
   try {
     playerRole = role;
@@ -3609,8 +3615,8 @@ window.addEventListener('load', async () => {
     lastT = performance.now();
     
     if (roomParam) {
-      showMPJoinScreen(roomParam.toLowerCase());
-      setTimeout(() => window.__doJoin(), 100);
+      window.__pendingRoomCode=roomParam.toLowerCase();
+      showNicknamePrompt('join');
     } else {
       showMainMenu();
     }
