@@ -21,6 +21,9 @@
   #hint{position:absolute;top:80px;left:50%;transform:translateX(-50%);background:rgba(5,10,20,0.9);border:1px solid rgba(100,180,255,0.5);padding:10px 20px;border-radius:6px;font-weight:bold;font-size:16px;display:none;}
   #hint.show{display:block;}
   #bottom{position:absolute;bottom:12px;left:16px;color:rgba(120,150,180,0.7);font-size:11px;}
+  #map-panel{position:fixed;right:22px;bottom:22px;width:min(300px,38vw);aspect-ratio:3/2;background:rgba(5,10,16,.92);border:1px solid rgba(130,175,215,.65);border-radius:10px;box-shadow:0 8px 30px #0009;z-index:12;display:none;pointer-events:none;overflow:hidden;}
+  #map-panel.show{display:block;}
+  #map-panel canvas{width:100%;height:100%;display:block;}
   #screen{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.92);pointer-events:auto;padding:20px;text-align:center;z-index:20;overflow-y:auto;}
   #screen.show{display:flex;}
   #screen h1{font-size:44px;margin:0 0 12px;letter-spacing:4px;text-shadow:0 0 30px currentColor;}
@@ -87,6 +90,7 @@
   <div id="bottom"></div>
 </div>
 <div id="mp-indicator" style="display:none;"></div>
+<div id="map-panel" aria-label="Карта"><canvas id="map-canvas" width="600" height="400"></canvas></div>
 <div id="sandbox-admin" aria-label="Панель администратора песочницы">
   <h3>АДМИН-ПАНЕЛЬ</h3><div class="admin-sub">ПЕСОЧНИЦА · F2 — показать / скрыть</div>
   <button class="admin-btn" id="admin-fly" onclick="window.__sandboxToggleFly()"><span>Полёт</span><b id="admin-fly-state">ВЫКЛ</b></button>
@@ -144,8 +148,8 @@ const CFG = {
   DASH_WINDUP:0.3, DASH_DURATION:0.4, DASH_COOLDOWN:8,
   WINDOW_BLOCK_AFTER:3, WINDOW_BLOCK_TIME:16, WINDOW_VAULT_RESET:12,
   CHASE_RANGE:400, FLASHLIGHT_RANGE:250, FLASHLIGHT_ANGLE:0.6,
-  HEAL_TIME:3, HIT_COOLDOWN:1.2, INJURED_SPEED_MULT:0.92,
-  GENERATOR_COUNT:3, GENERATOR_REPAIR_TIME:10, GENERATOR_INTERACT:75,
+  HEAL_TIME:6, HIT_COOLDOWN:1.2, INJURED_SPEED_MULT:0.92,
+  GENERATOR_COUNT:3, GENERATOR_REPAIR_TIME:15, GENERATOR_INTERACT:75,
   EXIT_OPEN_TIME:3, EXIT_INTERACT:80,
   BLOOD_TRAIL_INTERVAL:0.42, BLOOD_TRAIL_LIFETIME:6, BLOOD_TRAIL_VIEW_DISTANCE:260,
   BLOODLUST_THRESHOLD:10, BLOODLUST_MAX:3,
@@ -179,6 +183,7 @@ const SURVIVOR_ABILITIES = {
   ironwill:{name:'Железная воля',icon:'🎭',desc:'Не издаёшь звуков при ранении.',cooldown:0},
   resilience:{name:'Стойкость',icon:'🔥',desc:'+9% при ранении.',cooldown:0},
   adrenaline:{name:'Адреналин',icon:'⚡',desc:'Лечение при готовых генераторах.',cooldown:0},
+  mechanic:{name:'Механик',icon:'🧰',desc:'Ремонт генераторов на 12% быстрее.',cooldown:0},
 };
 const KILLER_ABILITIES = {
   dash:{name:'Хищный рывок',icon:'⚡',desc:'Space: рывок вперёд.'},
@@ -201,10 +206,10 @@ const KILLER_ABILITIES = {
 const ITEMS = {
   none:{name:'Без предмета',icon:'—',desc:'Ничего.',cooldown:0,active:false},
   flashlight:{name:'Фонарик',icon:'🔦',desc:'F: ослепить.',cooldown:20,active:true},
-  medkit:{name:'Аптечка',icon:'💉',desc:'F: лечиться 3с.',cooldown:0,active:true,single:true},
+  medkit:{name:'Аптечка',icon:'💉',desc:'F: лечиться 6с. Одно применение.',cooldown:0,active:true,single:true},
   smoke:{name:'Дымовая шашка',icon:'💨',desc:'F: дым на 4с.',cooldown:25,active:true},
   toolbox:{name:'Ящик',icon:'🔧',desc:'+35% к ремонту.',cooldown:0,active:false},
-  map:{name:'Карта',icon:'🗺️',desc:'Ауры сквозь стены.',cooldown:0,active:false},
+  map:{name:'Карта',icon:'🗺️',desc:'F: открыть карту объектов.',cooldown:0,active:true},
   key:{name:'Ключ',icon:'🗝️',desc:'F: открыть выход.',cooldown:0,active:true,single:true},
   firecracker:{name:'Петарда',icon:'🎆',desc:'F: ослепить.',cooldown:30,active:true},
 };
@@ -1465,10 +1470,7 @@ function makeSurvivorMesh(){
   attachSkinnedLimb(g,survivorSkeleton,fabric,{x:0.36,topY:1.37,bottomY:0.61,topRadius:0.12,bottomRadius:0.075,upperBone:6,lowerBone:7,splitY:0.99});
   attachSkinnedLimb(g,survivorSkeleton,denim,{x:-0.16,topY:0.60,bottomY:-0.13,topRadius:0.14,bottomRadius:0.09,upperBone:9,lowerBone:10,splitY:0.22});
   attachSkinnedLimb(g,survivorSkeleton,denim,{x:0.16,topY:0.60,bottomY:-0.13,topRadius:0.14,bottomRadius:0.09,upperBone:11,lowerBone:12,splitY:0.22});
-  const ringGeo=new THREE.RingGeometry(0.4,0.5,16);ringGeo.rotateX(-Math.PI/2);
-  const ringMat=new THREE.MeshBasicMaterial({color:0x66aaff,transparent:true,opacity:0.6,side:THREE.DoubleSide});
-  const ring=new THREE.Mesh(ringGeo,ringMat);ring.position.y=0.03;g.add(ring);
-  g.userData={lArm:l.upper,rArm:r.upper,lElbow:l.elbow,rElbow:r.elbow,lHand:l.hand,rHand:r.hand,lTool:l.tool,rTool:r.tool,flashlightProp:r.flashlightProp,lLeg:ll.hip,rLeg:rr.hip,lKnee:ll.knee,rKnee:rr.knee,body,bodyPivot,head,headPivot,ringMat,skeleton:survivorSkeleton,spineBone,chestBone};
+  g.userData={lArm:l.upper,rArm:r.upper,lElbow:l.elbow,rElbow:r.elbow,lHand:l.hand,rHand:r.hand,lTool:l.tool,rTool:r.tool,flashlightProp:r.flashlightProp,lLeg:ll.hip,rLeg:rr.hip,lKnee:ll.knee,rKnee:rr.knee,body,bodyPivot,head,headPivot,skeleton:survivorSkeleton,spineBone,chestBone};
   return g;
 }
 
@@ -2377,8 +2379,8 @@ function updateSurvivorAI(dt){
     s.facing = Math.atan2(dy, dx);
     survivor.repairing = target._exit ? { type: 'exit', ref: target._exit } : { type: 'gen', ref: target };
     let progressKey = target._exit ? 'openProgress' : 'progress';
-    let rate = target._exit ? 1/CFG.EXIT_OPEN_TIME : (1/CFG.GENERATOR_REPAIR_TIME);
-    target[progressKey] += rate / 60;
+    let rate = target._exit ? 1/CFG.EXIT_OPEN_TIME : (1/CFG.GENERATOR_REPAIR_TIME)*(selectedSurvivor==='mechanic'?1.12:1);
+    target[progressKey] += rate * dt;
     if (target[progressKey] >= 1) {
       if (target._exit) target._exit.opened = true;
       else target.done = true;
@@ -2470,7 +2472,7 @@ function tryInteractHold(input, dt=1/60){
   if (!near){s.repairing=null;s.repairTimer=0;return false;}
   s.repairing=near;
   if (near.type==='gen'){
-    let boost=1; if(selectedItem==='toolbox'&&!survivor.itemUsed) boost=1.35;
+    let boost=1; if(selectedItem==='toolbox'&&!survivor.itemUsed) boost=1.35; if(selectedSurvivor==='mechanic') boost*=1.12;
     near.ref.progress=Math.min(1,near.ref.progress+(dt/CFG.GENERATOR_REPAIR_TIME)*boost);
     if (near.ref.progress>=1){
       near.ref.progress=1; near.ref.done=true; screenShake=4;
@@ -2634,6 +2636,9 @@ function tryUseItem(){
     if (!near||nd>150){game.hint='Подойди к выходу';game.hintTime=1.5;return;}
     near.opened=true; near.openProgress=1; survivor.itemCooldown=9999;
     game.hint='Выход открыт!'; game.hintTime=2;
+  } else if (selectedItem==='map'){
+    const panel=document.getElementById('map-panel'); if(panel)panel.classList.toggle('show');
+    game.hint=panel&&panel.classList.contains('show')?'Карта открыта':'Карта закрыта';game.hintTime=1.2;
   } else if (selectedItem==='firecracker'){
     const tx=survivor.x+Math.cos(survivor.facing)*200;
     const ty=survivor.y+Math.sin(survivor.facing)*200;
@@ -2827,10 +2832,6 @@ function sync3D(dt){
     else if(u.body){u.body.rotation.x*=0.82;u.body.rotation.z*=0.82;}
     if (u.body) u.body.position.y = 1.0 + (moving ? Math.abs(Math.sin(survivor.walkPhase*2))*0.05 : 0);
     if (u.head) u.head.position.y = 1.65 + (moving ? Math.abs(Math.sin(survivor.walkPhase*2))*0.05 : 0);
-    if (u.ringMat){
-      u.ringMat.color.setHex(survivor.health==='injured'?0xff3333:0x66aaff);
-      u.ringMat.opacity = survivor.invisibleTimer>0?0.2:0.6;
-    }
     if(survivor.state==='downed'){survivorMesh.position.y=0.16;survivorMesh.rotation.x=-Math.PI/2.05;survivorMesh.rotation.z=Math.sin(performance.now()/420)*0.035;if(u.bodyPivot)u.bodyPivot.rotation.x=0.10;if(u.headPivot)u.headPivot.rotation.x=-0.10;if(u.lArm)u.lArm.rotation.x=-0.35;if(u.rArm)u.rArm.rotation.x=-0.35;if(u.lLeg)u.lLeg.rotation.x=0.12;if(u.rLeg)u.rLeg.rotation.x=-0.12;}else if(survivor.state==='hooked'){const h=hooks[survivor.hookIndex];if(h)survivorMesh.position.set(PX(h.x),0.38,PX(h.y));survivorMesh.rotation.x=0.08;survivorMesh.rotation.z=0.12;if(u.lArm)u.lArm.rotation.x=-1.45;if(u.rArm)u.rArm.rotation.x=-1.55;if(u.lElbow)u.lElbow.rotation.x=-0.55;if(u.rElbow)u.rElbow.rotation.x=-0.60;}else if(survivor.state==='carried'){survivorMesh.position.y=0.72;survivorMesh.rotation.x=0.62;survivorMesh.rotation.z=0.12;if(u.lArm)u.lArm.rotation.x=-1.65;if(u.rArm)u.rArm.rotation.x=-1.45;if(u.lKnee)u.lKnee.rotation.x=0.55;if(u.rKnee)u.rKnee.rotation.x=0.45;}else if(survivor.state==='vaulting'){
       const t=survivor.vaultTimer/survivor.vaultDuration,arc=Math.sin(t*Math.PI);
       survivorMesh.position.y=arc*1.2;survivorMesh.rotation.x=arc*0.48;
@@ -3070,11 +3071,26 @@ function sync3D(dt){
   }
 }
 
+function drawMapCanvas(){
+  const panel=document.getElementById('map-panel'),canvas=document.getElementById('map-canvas');
+  if(!panel||!canvas||!panel.classList.contains('show'))return;
+  const c=canvas.getContext('2d');if(!c)return;
+  const sx=canvas.width/2400,sy=canvas.height/1600;
+  c.clearRect(0,0,canvas.width,canvas.height);c.fillStyle='#17232b';c.fillRect(0,0,canvas.width,canvas.height);
+  c.strokeStyle='rgba(180,205,220,.24)';c.lineWidth=2;
+  for(const w of walls)c.strokeRect(w.x*sx,w.y*sy,w.w*sx,w.h*sy);
+  for(const g of generators){c.fillStyle=g.done?'#70e69b':'#f3b65e';c.fillRect(g.x*sx-7,g.y*sy-7,14,14);}
+  for(const e of exitDoors){c.fillStyle=e.opened?'#77edaa':'#d6dce3';c.fillRect(e.x*sx,e.y*sy,e.w*sx,e.h*sy);}
+  c.fillStyle='#75c8ff';c.beginPath();c.arc(survivor.x*sx,survivor.y*sy,8,0,Math.PI*2);c.fill();
+  c.fillStyle='#ff6666';c.beginPath();c.arc(killer.x*sx,killer.y*sy,8,0,Math.PI*2);c.fill();
+  c.fillStyle='#d8e5f0';c.font='bold 13px Segoe UI';c.fillText('КАРТА · ГЕНЕРАТОРЫ · ВЫХОДЫ',12,20);
+}
 function updateHUD(){
   const roleText = document.getElementById('roleText');
   if (roleText){ roleText.textContent = playerRole === 'survivor' ? 'ВЫЖИВШИЙ' : 'УБИЙЦА'; roleText.className = 'hud-value ' + (playerRole === 'survivor' ? 'blue' : 'red'); }
   const hp=document.getElementById('hpText');
   if (hp){ hp.textContent=survivor.state==='hooked'?'НА КРЮКЕ':(survivor.state==='carried'?'НЕСУТ':(survivor.state==='downed'?'ПОВЕРЖЕН':(survivor.health==='injured'?'РАНЕН':'ЗДОРОВ')));hp.className='hud-value '+(['hooked','carried','downed'].includes(survivor.state)||survivor.health==='injured'?'red':'green'); }
+  drawMapCanvas();
   const genRow=document.getElementById('genRow');
   if (genRow){
     if (genRow.children.length===0) for(let i=0;i<CFG.GENERATOR_COUNT;i++){const d=document.createElement('div');d.className='gen-dot';genRow.appendChild(d);}
