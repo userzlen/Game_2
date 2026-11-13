@@ -3252,7 +3252,7 @@ function showMPHosting(code, url){
       <div style="width:190px;padding:18px;background:#111416;border:1px dashed #66544b"><div style="font-size:68px">?</div><b id="mpGuestNick">ОЖИДАНИЕ ИГРОКА</b><div style="font-size:10px;color:#aaa;letter-spacing:2px;margin-top:6px">СЛОТ ИГРОКА</div></div>
     </div>
     <div class="room-code">${code}</div><div style="color:#aaa;font-size:12px">ССЫЛКА-ПРИГЛАШЕНИЕ</div><div class="invite-url" id="inviteUrl">${url}</div>
-    <div style="margin:14px"><button class="btn green" onclick="window.__copyInvite()">СКОПИРОВАТЬ ССЫЛКУ</button><button class="btn red" onclick="window.__cancelHost()">ВЫЙТИ</button></div><div id="status">Ожидание подключения…</div>
+    <div style="margin:14px"><button class="btn green" onclick="window.__copyInvite()">СКОПИРОВАТЬ ССЫЛКУ</button><button class="btn red" id="mpStartBtn" onclick="window.__startLobby()" disabled>НАЧАТЬ МАТЧ</button><button class="btn" onclick="window.__cancelHost()">ВЫЙТИ</button></div><div id="status">Ожидание подключения…</div>
   </div>`;
 }
 function mpEscape(v){return String(v||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -3263,9 +3263,10 @@ function showMPGuestLobby(){
 function refreshMPLobby(){
  const guest=document.getElementById('mpGuestNick');if(guest)guest.textContent=MP.remoteName||'ОЖИДАНИЕ ИГРОКА';
  const host=document.getElementById('mpHostNick');if(host)host.textContent=MP.remoteName||'ХОЗЯИН КОМНАТЫ';
- const status=document.getElementById('status');if(status)status.textContent=MP.remoteName?'Игрок подключён. Ожидание начала матча…':'Ожидание подключения…';
+ const status=document.getElementById('status');if(status)status.textContent=MP.remoteName?'Игрок подключён. Можно начинать матч.':'Ожидание подключения…';const start=document.getElementById('mpStartBtn');if(start)start.disabled=!MP.remoteName;
 }
 window.__cancelGuest=async()=>{await cleanupMultiplayer(false);showMPMenu();};
+window.__startLobby=()=>{if(MP.role!=='host'||!MP.connReady||!MP.remoteName)return;const guestRole=MP.myRole==='survivor'?'killer':'survivor';MP.conn.send({type:'start',guestRole,hostName:MP.playerName});beginPlaying();};
 function showMPJoinScreen(prefillCode){
   screenEl.classList.add('show');
   screenEl.innerHTML = `<h1 style="color:#8ab4ff;font-size:28px;">ВОЙТИ В КОМНАТУ</h1>
