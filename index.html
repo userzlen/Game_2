@@ -25,7 +25,26 @@
   #map-panel.show{display:block;}
   #map-panel canvas{width:100%;height:100%;display:block;}
   #screen{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.92);pointer-events:auto;padding:20px;text-align:center;z-index:20;overflow-y:auto;}
+
   #screen.show{display:flex;}
+  .dbd-panel{width:min(980px,96vw);margin:auto;padding:clamp(20px,4vw,42px);background:linear-gradient(145deg,rgba(25,24,23,.97),rgba(5,7,9,.98));border:1px solid #725044;box-shadow:0 24px 90px #000d;position:relative;isolation:isolate;}
+  .dbd-panel:before{content:"";position:absolute;inset:8px;border:1px solid rgba(180,115,86,.18);pointer-events:none;z-index:-1;}
+  .dbd-kicker{font-size:11px;letter-spacing:6px;color:#bd907c;text-transform:uppercase}
+  .dbd-title{font-size:clamp(25px,4vw,42px);letter-spacing:3px;color:#eee;margin:12px 0;text-shadow:0 3px 18px #000}
+  .dbd-sub{color:#a99b92;font-size:14px;line-height:1.6}
+  .dbd-input{box-sizing:border-box;width:min(420px,90%);margin:18px auto;padding:16px 18px;background:#08090a;border:1px solid #876052;color:#f4eee9;font:600 20px inherit;letter-spacing:2px;text-align:center;outline:none}
+  .dbd-input:focus{border-color:#d29b7f;box-shadow:0 0 0 2px #9d604533}
+  .dbd-slots{display:flex;justify-content:center;align-items:stretch;gap:clamp(12px,4vw,44px);margin:30px auto;flex-wrap:wrap}
+  .dbd-slot{width:min(230px,38vw);min-width:155px;min-height:210px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:18px 12px 16px;box-sizing:border-box;background:linear-gradient(180deg,#292321,#101112);border:1px solid #745344;position:relative}
+  .dbd-slot.center{transform:translateY(-8px);border:2px solid #b47a5e;box-shadow:0 0 35px #8e4d3430}
+  .dbd-slot.empty{border-style:dashed;opacity:.78}
+  .dbd-avatar{font-size:76px;line-height:1.15;filter:grayscale(.45) drop-shadow(0 8px 10px #000)}
+  .dbd-nick{max-width:100%;overflow-wrap:anywhere;margin-top:12px;color:#f0e8e2;font-size:17px;font-weight:800;letter-spacing:1px}
+  .dbd-role{margin-top:6px;color:#c08a72;font-size:10px;letter-spacing:3px}
+  .dbd-divider{height:1px;background:linear-gradient(90deg,transparent,#765447,transparent);margin:20px 0}
+  .dbd-actions{display:flex;justify-content:center;gap:8px;flex-wrap:wrap}
+  @media(max-width:560px){.dbd-slot{width:42vw;min-width:130px;min-height:175px}.dbd-avatar{font-size:58px}.dbd-panel{padding:18px 12px}}
+
   #screen h1{font-size:44px;margin:0 0 12px;letter-spacing:4px;text-shadow:0 0 30px currentColor;}
   #screen h2{font-size:18px;margin:0 0 24px;color:#88a0b8;font-weight:400;}
   .btn{background:#1a3a5a;color:#fff;border:2px solid #5a9ad0;padding:14px 32px;font-size:18px;font-weight:bold;border-radius:6px;cursor:pointer;margin:8px;transition:all 0.15s;letter-spacing:2px;font-family:inherit;}
@@ -3244,26 +3263,76 @@ function showMPHostSelect(){
 }
 function showMPHosting(code, url){
   screenEl.classList.add('show');
-  screenEl.innerHTML = `<div style="width:min(850px,94vw);margin:auto;padding:30px;background:linear-gradient(145deg,#1b1d1e,#080a0c);border:1px solid #60483e;text-align:center;box-shadow:0 20px 80px #000b">
-    <div style="color:#bd907c;letter-spacing:5px;font-size:11px">DEAD BY DAYLIGHT · ЛОББИ</div><h1 style="color:#eee;font-size:30px">КОМНАТА ОЖИДАНИЯ</h1>
-    <div style="color:#aaa;margin-bottom:25px">Ты — хозяин комнаты и стоишь в центре лобби</div>
-    <div style="display:flex;justify-content:center;align-items:end;gap:38px;margin:28px auto">
-      <div style="width:190px;padding:18px;background:#29201e;border:1px solid #a35e4c"><div style="font-size:68px">🧍</div><b>${mpEscape(MP.playerName||'ХОСТ')}</b><div style="font-size:10px;color:#c18b79;letter-spacing:2px;margin-top:6px">ХОЗЯИН · ЦЕНТР</div></div>
-      <div style="width:190px;padding:18px;background:#111416;border:1px dashed #66544b"><div style="font-size:68px">?</div><b id="mpGuestNick">ОЖИДАНИЕ ИГРОКА</b><div style="font-size:10px;color:#aaa;letter-spacing:2px;margin-top:6px">СЛОТ ИГРОКА</div></div>
-    </div>
-    <div class="room-code">${code}</div><div style="color:#aaa;font-size:12px">ССЫЛКА-ПРИГЛАШЕНИЕ</div><div class="invite-url" id="inviteUrl">${url}</div>
-    <div style="margin:14px"><button class="btn green" onclick="window.__copyInvite()">СКОПИРОВАТЬ ССЫЛКУ</button><button class="btn red" id="mpStartBtn" onclick="window.__startLobby()" disabled>НАЧАТЬ МАТЧ</button><button class="btn" onclick="window.__cancelHost()">ВЫЙТИ</button></div><div id="status">Ожидание подключения…</div>
-  </div>`;
+  screenEl.innerHTML = `
+    <section class="dbd-panel">
+      <div class="dbd-kicker">Dead by Daylight · Multiplayer</div>
+      <h1 class="dbd-title">КОМНАТА ОЖИДАНИЯ</h1>
+      <div class="dbd-sub">Ты — хозяин комнаты. Друг появится рядом после подключения.</div>
+      <div class="dbd-slots">
+        <div class="dbd-slot center">
+          <div class="dbd-avatar">🧍</div>
+          <div class="dbd-nick">${mpEscape(MP.playerName||'ХОСТ')}</div>
+          <div class="dbd-role">ХОЗЯИН · ЦЕНТР</div>
+        </div>
+        <div class="dbd-slot empty" id="mpGuestSlot">
+          <div class="dbd-avatar" id="mpGuestAvatar">?</div>
+          <div class="dbd-nick" id="mpGuestNick">ОЖИДАНИЕ ИГРОКА</div>
+          <div class="dbd-role">ВТОРОЙ ИГРОК</div>
+        </div>
+      </div>
+      <div class="dbd-divider"></div>
+      <div class="dbd-sub">КОД КОМНАТЫ</div>
+      <div class="room-code">${mpEscape(code)}</div>
+      <div class="dbd-sub">ССЫЛКА-ПРИГЛАШЕНИЕ</div>
+      <div class="invite-url" id="inviteUrl">${mpEscape(url)}</div>
+      <div class="dbd-actions">
+        <button class="btn green" onclick="window.__copyInvite()">СКОПИРОВАТЬ ССЫЛКУ</button>
+        <button class="btn red" id="mpStartBtn" onclick="window.__startLobby()" disabled>НАЧАТЬ МАТЧ</button>
+        <button class="btn" onclick="window.__cancelHost()">ВЫЙТИ</button>
+      </div>
+      <div id="status">Ожидание подключения…</div>
+    </section>`;
 }
 function mpEscape(v){return String(v||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function showMPGuestLobby(){
- screenEl.classList.add('show');
- screenEl.innerHTML='<div style="width:min(700px,92vw);margin:10vh auto;padding:30px;background:#111519;border:1px solid #60483e;text-align:center"><div style="color:#bd907c;letter-spacing:5px">DEAD BY DAYLIGHT · ЛОББИ</div><h1>ТЫ В КОМНАТЕ</h1><div style="display:flex;justify-content:center;gap:40px;margin:30px"><div><div style="font-size:64px">🧍</div><b>'+mpEscape(MP.playerName)+'</b><div style="color:#bd907c">ТЫ</div></div><div><div style="font-size:64px">🧍</div><b id="mpHostNick">ХОЗЯИН КОМНАТЫ</b><div style="color:#bd907c">ХОСТ</div></div></div><div id="status">Ожидание начала матча хозяином…</div><button class="btn" onclick="window.__cancelGuest()">ВЫЙТИ</button></div>';
+  screenEl.classList.add('show');
+  screenEl.innerHTML = `
+    <section class="dbd-panel">
+      <div class="dbd-kicker">Dead by Daylight · Multiplayer</div>
+      <h1 class="dbd-title">КОМНАТА ОЖИДАНИЯ</h1>
+      <div class="dbd-sub">Ты подключился к комнате. Дождись начала матча от хозяина.</div>
+      <div class="dbd-slots">
+        <div class="dbd-slot">
+          <div class="dbd-avatar">🧍</div>
+          <div class="dbd-nick">${mpEscape(MP.remoteName||'ХОЗЯИН КОМНАТЫ')}</div>
+          <div class="dbd-role">ХОЗЯИН · ЦЕНТР</div>
+        </div>
+        <div class="dbd-slot center">
+          <div class="dbd-avatar">🧍</div>
+          <div class="dbd-nick">${mpEscape(MP.playerName||'ИГРОК')}</div>
+          <div class="dbd-role">ТЫ</div>
+        </div>
+      </div>
+      <div class="dbd-divider"></div>
+      <div id="status">Ожидание начала матча хозяином…</div>
+      <button class="btn" onclick="window.__cancelGuest()">ВЫЙТИ</button>
+    </section>`;
 }
 function refreshMPLobby(){
- const guest=document.getElementById('mpGuestNick');if(guest)guest.textContent=MP.remoteName||'ОЖИДАНИЕ ИГРОКА';
- const host=document.getElementById('mpHostNick');if(host)host.textContent=MP.remoteName||'ХОЗЯИН КОМНАТЫ';
- const status=document.getElementById('status');if(status)status.textContent=MP.remoteName?'Игрок подключён. Можно начинать матч.':'Ожидание подключения…';const start=document.getElementById('mpStartBtn');if(start)start.disabled=!MP.remoteName;
+ const guest=document.getElementById('mpGuestNick');
+ if(guest){
+   guest.textContent=MP.remoteName||'ОЖИДАНИЕ ИГРОКА';
+   const slot=document.getElementById('mpGuestSlot');
+   const avatar=document.getElementById('mpGuestAvatar');
+   if(slot)slot.classList.toggle('empty',!MP.remoteName);
+   if(avatar)avatar.textContent=MP.remoteName?'🧍':'?';
+ }
+ const host=document.getElementById('mpHostNick');
+ if(host)host.textContent=MP.remoteName||'ХОЗЯИН КОМНАТЫ';
+ const status=document.getElementById('status');
+ if(status)status.textContent=MP.remoteName?'Игрок подключён. Можно начинать матч.':'Ожидание подключения…';
+ const start=document.getElementById('mpStartBtn');
+ if(start)start.disabled=!MP.remoteName;
 }
 window.__cancelGuest=async()=>{await cleanupMultiplayer(false);showMPMenu();};
 window.__startLobby=()=>{if(MP.role!=='host'||!MP.connReady||!MP.remoteName)return;const guestRole=MP.myRole==='survivor'?'killer':'survivor';MP.conn.send({type:'start',guestRole,hostName:MP.playerName});beginPlaying();};
@@ -3309,11 +3378,35 @@ window.__sp = async () => {
 };
 function showNicknamePrompt(next){
   screenEl.classList.add('show');
-  screenEl.innerHTML = '<div style="max-width:520px;margin:10vh auto;padding:34px;background:#111519;border:1px solid #765044;text-align:center"><div style="color:#c18c78;letter-spacing:5px">DEAD BY DAYLIGHT</div><h1>ВВЕДИ СВОЙ НИК</h1><p style="color:#aaa">Его будут видеть остальные игроки</p><input id="mpNickInput" maxlength="20" placeholder="ТВОЙ НИК" style="font-size:20px;padding:13px;background:#080a0c;color:white;border:1px solid #9b6455;text-align:center"><div style="margin-top:20px"><button class="btn red" onclick="window.__saveNick(\''+next+'\')">ПРОДОЛЖИТЬ</button></div></div>';
-  setTimeout(()=>document.getElementById('mpNickInput')?.focus(),0);
+  screenEl.innerHTML = `
+    <section class="dbd-panel" style="max-width:620px">
+      <div class="dbd-kicker">Dead by Daylight · Player profile</div>
+      <h1 class="dbd-title">КАК ТЕБЯ ЗОВУТ?</h1>
+      <p class="dbd-sub">Создай игровой ник. Он будет показан под твоим персонажем в комнате ожидания и другим игрокам.</p>
+      <input id="mpNickInput" class="dbd-input" maxlength="20" autocomplete="nickname" placeholder="ВВЕДИ НИК" value="${mpEscape(MP.playerName||'')}">
+      <div class="dbd-actions">
+        <button class="btn red" onclick="window.__saveNick('${next}')">ПРОДОЛЖИТЬ</button>
+        <button class="btn" onclick="window.__menu()">НАЗАД</button>
+      </div>
+      <div class="dbd-sub" style="font-size:11px;margin-top:14px">Ник сохраняется на этом устройстве. Пароль и отдельный аккаунт не нужны.</div>
+    </section>`;
+  const input=document.getElementById('mpNickInput');
+  input?.focus();
+  input?.addEventListener('keydown',e=>{if(e.key==='Enter')window.__saveNick('${next}');});
 }
-window.__saveNick = (next) => { const el=document.getElementById('mpNickInput'); const name=(el?.value||'').trim().replace(/\s+/g,' ').slice(0,20); if(!name){el?.focus();return;} MP.playerName=name; if(next==='join') showMPJoinScreen(window.__pendingRoomCode||''); else showMPMenu(); };
-window.__mpMenu = async () => { if (MP.active) await cleanupMultiplayer(MP.role === 'host'); if(!MP.playerName){showNicknamePrompt('menu');return;} showMPMenu(); };
+window.__saveNick = (next) => {
+  const el=document.getElementById('mpNickInput');
+  const name=(el?.value||'').trim().replace(/\\s+/g,' ').slice(0,20);
+  if(!name){el?.focus();return;}
+  MP.playerName=name;
+  try{localStorage.setItem('dbd_player_nick',name);}catch(_){}
+  if(next==='join') showMPJoinScreen(window.__pendingRoomCode||''); else showMPMenu();
+};
+window.__mpMenu = async () => {
+  if (MP.active) await cleanupMultiplayer(MP.role === 'host');
+  try{MP.playerName=localStorage.getItem('dbd_player_nick')||MP.playerName||'';}catch(_){}
+  showNicknamePrompt('menu');
+};
 
 window.__roleSurvivor = () => { playerRole = 'survivor'; MP.active = false; MP.myRole = 'survivor'; showSurvivorSelect(); };
 window.__roleKiller = () => { playerRole = 'killer'; MP.active = false; MP.myRole = 'killer'; showKillerReveal(); };
