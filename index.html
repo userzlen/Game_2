@@ -1089,20 +1089,55 @@ function buildWorld(){
   for (const p of pallets){
     const group = new THREE.Group();
     const pivot = new THREE.Group();
-    for (let j = 0; j < 4; j++){
-      const plank = new THREE.Mesh(new THREE.BoxGeometry(PX(CFG.PALLET_LEN), 0.08, 0.15), woodMat());
-      plank.position.set(0, 0, (j - 1.5) * 0.2);
-      plank.castShadow = true; plank.receiveShadow = true; pivot.add(plank);
+    const deckFront = [0xa77d43,0x98703b,0xb0874b,0x9c7440,0xad8249].map(color =>
+      new THREE.MeshStandardMaterial({color,roughness:0.9})
+    );
+    const deckBack = new THREE.MeshStandardMaterial({color:0x76542f,roughness:0.94});
+    const runnerMat = new THREE.MeshStandardMaterial({color:0x604326,roughness:0.96});
+    const ironMat = new THREE.MeshStandardMaterial({color:0x34383a,roughness:0.55,metalness:0.68});
+    const length = PX(CFG.PALLET_LEN);
+    const slatCount = 5;
+    const slatWidth = 0.145;
+    const slatGap = 0.035;
+    const slatStep = slatWidth + slatGap;
+    const slatStart = -((slatCount-1)*slatStep)/2;
+
+    // Five broad face boards with visible gaps, rather than the old four thin strips.
+    for(let j=0;j<slatCount;j++){
+      const z=slatStart+j*slatStep;
+      const plank=new THREE.Mesh(new THREE.BoxGeometry(length,0.095,slatWidth),deckFront[j]);
+      plank.position.set(0,0.105,z);
+      plank.castShadow=true;plank.receiveShadow=true;pivot.add(plank);
+
+      const rear=new THREE.Mesh(new THREE.BoxGeometry(length*0.96,0.075,slatWidth*0.9),deckBack);
+      rear.position.set(0,-0.105,z);
+      rear.castShadow=true;rear.receiveShadow=true;pivot.add(rear);
     }
-    for (let j = 0; j < 3; j++){
-      const beam = new THREE.Mesh(new THREE.BoxGeometry(0.22,0.12,0.84),woodMat());
-      beam.position.set((j-1)*PX(CFG.PALLET_LEN)*0.32,-0.08,0);
-      beam.castShadow=true;beam.receiveShadow=true;pivot.add(beam);
+
+    // Three solid runners tie both faces together and remain visible through the gaps.
+    for(const x of [-length*0.36,0,length*0.36]){
+      const runner=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.29,0.91),runnerMat);
+      runner.position.set(x,0,0);
+      runner.castShadow=true;runner.receiveShadow=true;pivot.add(runner);
+
+      const foot=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.22,0.18),runnerMat);
+      foot.position.set(x,0.015,0.43);
+      foot.castShadow=true;pivot.add(foot);
+      const footRear=foot.clone();
+      footRear.position.z=-0.43;pivot.add(footRear);
     }
-    for(const side of [-1,1]){
-      const brace=new THREE.Mesh(new THREE.BoxGeometry(PX(CFG.PALLET_LEN)*0.72,0.07,0.07),woodMat());
-      brace.position.set(0,-0.12,side*0.27);brace.rotation.y=side*0.08;pivot.add(brace);
+
+    // Small dark fasteners give the boards readable construction detail at game distance.
+    for(const x of [-length*0.36,0,length*0.36]){
+      for(let j=0;j<slatCount;j++){
+        const z=slatStart+j*slatStep;
+        const nail=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.018,0.012,8),ironMat);
+        nail.rotation.x=Math.PI/2;
+        nail.position.set(x,0.158,z);
+        pivot.add(nail);
+      }
     }
+
     pivot.rotation.x = Math.PI / 2.1;
     group.add(pivot);
     group.position.set(PX(p.x), 0.6, PX(p.y));
