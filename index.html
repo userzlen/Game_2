@@ -669,7 +669,7 @@ function broadcastState(){
       vaultDuration: survivor.vaultDuration, walkPhase: survivor.walkPhase,
       invisibleTimer: survivor.invisibleTimer, speedBoostTimer: survivor.speedBoostTimer,
       hitCooldown: survivor.hitCooldown, abilityCooldown: survivor.abilityCooldown,
-      itemCooldown: survivor.itemCooldown,
+      itemCooldown: survivor.itemCooldown,itemUsed:!!survivor.itemUsed,
       repairingGenerator: survivor.repairing && survivor.repairing.type === 'gen' ? generators.indexOf(survivor.repairing.ref) : -1,
       flashlightActive:survivor.flashlightActive,flashlightCharge:survivor.flashlightCharge,
     },
@@ -726,7 +726,7 @@ function applyStateToWorld(state){
   survivor.speedBoostTimer = state.survivor.speedBoostTimer;
   survivor.hitCooldown = state.survivor.hitCooldown;
   survivor.abilityCooldown = state.survivor.abilityCooldown;
-  survivor.itemCooldown = state.survivor.itemCooldown;
+  survivor.itemCooldown = state.survivor.itemCooldown;survivor.itemUsed=!!state.survivor.itemUsed;
   survivor.flashlightActive=!!state.survivor.flashlightActive;survivor.flashlightCharge=state.survivor.flashlightCharge||0;
   survivor.repairing = Number.isInteger(state.survivor.repairingGenerator) && state.survivor.repairingGenerator >= 0 && generators[state.survivor.repairingGenerator] ? {type:'gen',ref:generators[state.survivor.repairingGenerator]} : null;
 
@@ -2317,7 +2317,11 @@ function tryInteractHold(input, dt=1/60){
     near.ref.progress=Math.min(1,near.ref.progress+(dt/CFG.GENERATOR_REPAIR_TIME)*boost);
     if (near.ref.progress>=1){
       near.ref.progress=1; near.ref.done=true; screenShake=4;
-      game.hint='Генератор готов!'; game.hintTime=2;
+      if(selectedItem==='toolbox'&&!survivor.itemUsed){
+        survivor.itemUsed=true;
+        game.hint='Генератор готов! Набор инструментов израсходован.';
+      }else game.hint='Генератор готов!';
+      game.hintTime=2;
     }
     return true;
   } else if (near.type==='totem'){
