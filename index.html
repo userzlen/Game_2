@@ -1127,43 +1127,42 @@ function buildWorld(){
     const slatStep = slatWidth + slatGap;
     const slatStart = -((slatCount-1)*slatStep)/2;
 
-    // Five broad face boards with visible gaps, rather than the old four thin strips.
+    // Horizontal face planks: after the upright pivot rotation these read as stacked pallet boards.
     for(let j=0;j<slatCount;j++){
-      const z=slatStart+j*slatStep;
-      const plank=new THREE.Mesh(new THREE.BoxGeometry(length,0.095,slatWidth),deckFront[j]);
-      plank.position.set(0,0.105,z);
+      const y=slatStart+j*slatStep;
+      const plank=new THREE.Mesh(new THREE.BoxGeometry(length,slatWidth,0.095),deckFront[j]);
+      plank.position.set(0,y,0.105);
       plank.castShadow=true;plank.receiveShadow=true;pivot.add(plank);
 
-      const rear=new THREE.Mesh(new THREE.BoxGeometry(length*0.96,0.075,slatWidth*0.9),deckBack);
-      rear.position.set(0,-0.105,z);
+      const rear=new THREE.Mesh(new THREE.BoxGeometry(length*0.96,slatWidth*0.9,0.075),deckBack);
+      rear.position.set(0,y,-0.105);
       rear.castShadow=true;rear.receiveShadow=true;pivot.add(rear);
     }
 
-    // Two end uprights make the dropped obstacle read as a braced pallet, not a fence.
-    for(const x of [-length*0.43,length*0.43]){
-      const upright=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.72,0.19),runnerMat);
+    // Three thick vertical stringers form the characteristic pallet structure.
+    for(const x of [-length*0.36,0,length*0.36]){
+      const upright=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.20,0.82),runnerMat);
       upright.position.set(x,0,0);upright.castShadow=true;upright.receiveShadow=true;pivot.add(upright);
     }
 
     // Three solid runners tie both faces together and remain visible through the gaps.
     for(const x of [-length*0.36,0,length*0.36]){
-      const runner=new THREE.Mesh(new THREE.BoxGeometry(0.24,0.29,0.91),runnerMat);
+      const runner=new THREE.Mesh(new THREE.BoxGeometry(0.25,0.22,0.88),runnerMat);
       runner.position.set(x,0,0);
       runner.castShadow=true;runner.receiveShadow=true;pivot.add(runner);
-
-      const foot=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.22,0.18),runnerMat);
-      foot.position.set(x,0.015,0.43);
-      foot.castShadow=true;pivot.add(foot);
-      const footRear=foot.clone();
-      footRear.position.z=-0.43;pivot.add(footRear);
+      for(const z of [-0.43,0.43]){
+        const foot=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.24,0.16),runnerMat);
+        foot.position.set(x,0,z);foot.castShadow=true;pivot.add(foot);
+      }
     }
 
     // Small dark fasteners give the boards readable construction detail at game distance.
     for(const x of [-length*0.36,0,length*0.36]){
       for(let j=0;j<slatCount;j++){
-        const z=slatStart+j*slatStep;
+        const y=slatStart+j*slatStep;
         const nail=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.018,0.012,8),ironMat);
-        nail.position.set(x,0.158,z);
+        nail.rotation.x=Math.PI/2;
+        nail.position.set(x,y,0.158);
         pivot.add(nail);
       }
     }
@@ -1562,19 +1561,21 @@ function makeFirstPersonFlashlightRig(){
 }
 
 function makeFirstPersonKillerRig(){
-  const group=new THREE.Group();group.position.set(0.34,-0.31,-0.72);group.rotation.set(-0.12,-0.10,-0.08);
+  const group=new THREE.Group();group.position.set(0.42,-0.28,-0.82);group.rotation.set(-0.18,-0.06,-0.04);
   const sleeveMat=new THREE.MeshStandardMaterial({color:0x21191a,roughness:0.96});
   const gloveMat=new THREE.MeshStandardMaterial({color:0x171314,roughness:0.9});
-  const metalMat=new THREE.MeshStandardMaterial({color:0x9aa0a3,metalness:0.86,roughness:0.3});
+  const metalMat=new THREE.MeshStandardMaterial({color:0x65d9ff,emissive:0x147ca8,emissiveIntensity:0.9,metalness:0.35,roughness:0.24});
   const upper=new THREE.Group();group.add(upper);
   const sleeve=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.12,0.42,10),sleeveMat);sleeve.rotation.x=-0.45;sleeve.position.set(-0.04,-0.16,0.08);upper.add(sleeve);
   const wrist=new THREE.Group();wrist.position.set(0,-0.34,-0.02);upper.add(wrist);
   const palm=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.13,0.12),gloveMat);palm.position.y=-0.02;wrist.add(palm);
   const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.032,0.042,0.25,9),gloveMat);grip.position.set(0,-0.10,-0.06);wrist.add(grip);
   const guard=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.045,0.065),metalMat);guard.position.set(0,0.02,-0.06);wrist.add(guard);
-  const shape=new THREE.Shape();shape.moveTo(-0.045,0.02);shape.lineTo(0.045,0.02);shape.lineTo(0.038,0.52);shape.lineTo(0,0.78);shape.lineTo(-0.038,0.52);shape.closePath();
-  const blade=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:0.025,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:0.008,bevelThickness:0.008}),metalMat);
-  blade.position.set(0,0.04,-0.075);wrist.add(blade);
+  const shape=new THREE.Shape();shape.moveTo(-0.075,0.02);shape.lineTo(0,0.14);shape.lineTo(0.075,0.02);shape.lineTo(0.025,0.46);shape.lineTo(0,0.72);shape.lineTo(-0.025,0.46);shape.closePath();
+  const shard=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:0.055,bevelEnabled:true,bevelSegments:2,steps:1,bevelSize:0.018,bevelThickness:0.012}),metalMat);
+  shard.position.set(0,0.04,-0.075);wrist.add(shard);
+  const glow=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.46,0.018),new THREE.MeshBasicMaterial({color:0x9df0ff,transparent:true,opacity:0.72}));
+  glow.position.set(0,0.38,-0.012);wrist.add(glow);
   group.visible=false;return{group,upper,wrist};
 }
 
@@ -2055,6 +2056,12 @@ function updateKillerAI(dt){
 
 function updateKillerPlayer(dt, input){
   const k = killer;
+  // Capture the mouse button edges before any movement/state early-return.
+  // Otherwise the lunge branch skips the release edge and a held click can desync the attack state.
+  const attackNow=!!input.attack;
+  const attackPressed=attackNow&&!k.attackHeldPrev;
+  const attackReleased=!attackNow&&k.attackHeldPrev;
+  k.attackHeldPrev=attackNow;
   if (k.dashCooldown>0) k.dashCooldown-=dt;
   if (k.rageTimer>0) k.rageTimer-=dt;
   if (k.trapCooldown>0) k.trapCooldown-=dt;
@@ -2187,9 +2194,8 @@ function updateKillerPlayer(dt, input){
     }
   }
 
-  const attackNow=!!input.attack;
-  if(attackNow&&!k.attackHeldPrev){k.attackChargeTimer=0;k.attackLungeTriggered=false;}
-  if(attackNow&&k.attackCooldown<=0&&k.attackRecoveryTimer<=0){
+  if(attackPressed){k.attackChargeTimer=0;k.attackLungeTriggered=false;}
+  if(attackNow&&!k.attackLungeTriggered&&k.attackCooldown<=0&&k.attackRecoveryTimer<=0){
     k.attackChargeTimer+=dt;
     if(k.attackChargeTimer>=CFG.ATTACK_CHARGE_TIME&&k.attackLungeTimer<=0){
       k.attackLungeTimer=CFG.ATTACK_LUNGE_TIME;k.attackLungeDirX=Math.cos(k.facing);k.attackLungeDirY=Math.sin(k.facing);
@@ -2197,14 +2203,12 @@ function updateKillerPlayer(dt, input){
       k.attackCooldown=CFG.KILLER_ATTACK_COOLDOWN;k.attackRecoveryTimer=0.28;k.attackHitPending=false;
     }
   }
-  if(!attackNow&&k.attackHeldPrev&&!k.attackLungeTriggered&&k.attackCooldown<=0&&k.attackRecoveryTimer<=0&&k.attackLungeTimer<=0){
+  if(attackReleased&&!k.attackLungeTriggered&&k.attackCooldown<=0&&k.attackRecoveryTimer<=0&&k.attackLungeTimer<=0){
     k.attackAnimTimer=0.52;k.attackAnimType='swing';k.animEvent='attack';k.animTimer=0.52;
     k.attackCooldown=CFG.KILLER_ATTACK_COOLDOWN;k.attackRecoveryTimer=0.22;
     k.attackHitPending=true;k.attackHitTimer=0.22;k.attackLungeTriggered=false;
   }
-  if(!attackNow)k.attackLungeTriggered=false;
-  k.attackHeldPrev=attackNow;
-  if(!attackNow&&k.attackLungeTimer<=0)k.attackChargeTimer=0;
+  if(!attackNow){k.attackLungeTriggered=false;if(k.attackLungeTimer<=0)k.attackChargeTimer=0;}
 // Ability activation is edge-triggered by the main loop; do not trigger it again here.
 }
 
@@ -2695,8 +2699,9 @@ function sync3D(dt){
       const duration=killer.attackAnimType==='swing'?0.52:0.5;
       const active=killer.attackAnimTimer>0?THREE.MathUtils.clamp(1-killer.attackAnimTimer/duration,0,1):0;
       const wind=Math.max(0,1-active/0.28),strike=Math.sin(THREE.MathUtils.clamp((active-0.18)/0.48,0,1)*Math.PI/2),follow=Math.max(0,Math.sin((active-0.58)/0.42*Math.PI));
-      firstPersonKillerRig.upper.rotation.set(-0.08-0.42*wind+0.82*strike-0.12*follow,0.02+0.10*strike,-0.08-0.18*wind+0.20*strike);
-      firstPersonKillerRig.wrist.rotation.set(-0.18*wind+0.30*strike-0.12*follow,0,0.06*wind-0.08*strike);
+      const idleBob=Math.sin(performance.now()/180)*0.018;
+      firstPersonKillerRig.upper.rotation.set(-0.08-0.42*wind+0.82*strike-0.12*follow+idleBob,0.02+0.10*strike,-0.08-0.18*wind+0.20*strike);
+      firstPersonKillerRig.wrist.rotation.set(-0.18*wind+0.30*strike-0.12*follow+idleBob,0,0.06*wind-0.08*strike);
     }
   }
   if(firstPersonFlashlightRig){
