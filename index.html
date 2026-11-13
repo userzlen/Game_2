@@ -2278,8 +2278,8 @@ function updatePallets(dt){
     if (p.state==='falling'){
       p.fallTimer+=dt;
       const t=Math.min(1,p.fallTimer/CFG.PALLET_FALL_TIME),e=1-Math.pow(1-t,3);
-      p.visualAngle=p.fallDir*Math.PI*0.44*(1-e);
-      if (p.fallTimer>=CFG.PALLET_FALL_TIME){p.state='dropped';p.fallTimer=0;p.visualAngle=0;screenShake=4;costMap=null;}
+      p.visualAngle=p.fallDir*(Math.PI/2.1)*e;
+      if (p.fallTimer>=CFG.PALLET_FALL_TIME){p.state='dropped';p.fallTimer=0;p.visualAngle=(Math.PI/2.1)*(p.fallDir||1);screenShake=4;costMap=null;}
     }
   }
 }
@@ -2780,9 +2780,9 @@ function sync3D(dt){
     const p = pm.pallet;
     if (p.state==='upright'){ pm.pivot.rotation.x = Math.PI/2.1; pm.group.position.y = 0.6; pm.group.visible = true; }
     else if (p.state==='falling'){
-      const t = p.fallTimer / CFG.PALLET_FALL_TIME, e = 1 - Math.pow(1-t,3);
+      const t = THREE.MathUtils.clamp(p.fallTimer / CFG.PALLET_FALL_TIME,0,1), e = 1 - Math.pow(1-t,3);
       pm.pivot.rotation.x = (Math.PI/2.1) * (1-e) * (p.fallDir || 1);
-      pm.group.position.y = 0.1 + 0.5 * (1-e);
+      pm.group.position.y = 0.6 - 0.5 * e;
       pm.group.visible = true;
     }
     else if (p.state==='dropped'||p.state==='breaking'){ pm.pivot.rotation.x = 0; pm.group.position.y = 0.1; pm.group.visible = true; }
@@ -3160,7 +3160,7 @@ function sandboxAdminMessage(message){
   const el=document.getElementById('admin-status');if(el)el.textContent=message;
 }
 function restoreSandboxMap(){
-  for(const p of pallets){p.state='upright';p.fallTimer=0;p.breakTimer=0;p.visualAngle=Math.PI*0.44;p.fallDir=1;}
+  for(const p of pallets){p.state='upright';p.fallTimer=0;p.breakTimer=0;p.visualAngle=Math.PI/2.1;p.fallDir=1;}
   for(const w of windows){w.vaultTimestamps=[];w.blockedTimer=0;}
   for(const g of generators){g.progress=0;g.done=false;}
   for(const e of exitDoors){e.opened=false;e.openProgress=0;}
@@ -3221,7 +3221,7 @@ function resetGame(){
   killer.instinctTimer=CFG.KILLER_INSTINCT_INTERVAL; killer.instinctActive=0;
   killer.cautiousTimer=0; killer.chaseCommitTimer=0;
 
-  for(const p of pallets){p.state='upright';p.fallTimer=0;p.breakTimer=0;p.visualAngle=Math.PI*0.44;}
+  for(const p of pallets){p.state='upright';p.fallTimer=0;p.breakTimer=0;p.visualAngle=Math.PI/2.1;}
   for(const win of windows){win.vaultTimestamps=[];win.blockedTimer=0;}
   for(const g of generators){g.progress=0;g.done=false;}
   totem.broken=false; totem.progress=0;
