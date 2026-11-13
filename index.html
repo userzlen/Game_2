@@ -332,7 +332,7 @@ const SB = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, 
 
 let THREE = null;
 let scene, camera3d, renderer, sunLight;
-let survivorMesh, killerMesh, killerAuraLight, firstPersonRepairRig=null;
+let survivorMesh, killerMesh, killerAuraLight, firstPersonRepairRig=null, firstPersonKillerRig=null;
 const palletMeshes = [], generatorMeshes = [], exitMeshes = [], windowMeshes = [];
 const bloodTrailMeshes = [], trapMeshes = [], hatchetMeshes = [], smokeMeshes = [];
 const totemMesh = {group:null, light:null};
@@ -1025,9 +1025,11 @@ function sanitizeDecorLayout(){
     for (const p of pallets) if (Math.hypot(x-p.x,y-p.y) < r+72) return true;
     for (const win of windows) if (circleRect(x,y,r+8,win.x-18,win.y-18,win.w+36,win.h+36)) return true;
     for (const e of exitDoors) if (circleRect(x,y,r+8,e.x,e.y,e.w,e.h)) return true;
+    const clearanceRadius=d.type==='tree'?r*2.15+18:r+12;
+    for (const w of walls) if (circleRect(x,y,clearanceRadius,w.x,w.y,w.w,w.h)) return true;
     for (let i=0;i<index;i++){
-      const other=decor[i];
-      if (Math.hypot(x-other.x,y-other.y) < r+other.r+12) return true;
+      const other=decor[i],otherClearance=other.type==='tree'?other.r*2.15+18:other.r+12;
+      if (Math.hypot(x-other.x,y-other.y) < clearanceRadius+otherClearance) return true;
     }
     return false;
   };
@@ -1321,6 +1323,7 @@ function buildWorld(){
   }
   survivorMesh = makeSurvivorMesh(); scene.add(survivorMesh);
   firstPersonRepairRig = makeFirstPersonRepairRig(); camera3d.add(firstPersonRepairRig.group);
+  firstPersonKillerRig=makeFirstPersonKillerRig();camera3d.add(firstPersonKillerRig.group);
   killerMesh = makeKillerMesh(); killerMesh.scale.setScalar(0.78); scene.add(killerMesh);
   killerAuraLight = new THREE.PointLight(0xff3333, 0.8, 8); killerAuraLight.position.y = 1; killerMesh.add(killerAuraLight);
 }
@@ -1459,6 +1462,23 @@ function makeFirstPersonRepairRig(){
   }
   const left=makeArm(-1),right=makeArm(1);
   return {group,left,right};
+}
+
+function makeFirstPersonKillerRig(){
+  const group=new THREE.Group();group.position.set(0.34,-0.31,-0.72);group.rotation.set(-0.12,-0.10,-0.08);
+  const sleeveMat=new THREE.MeshStandardMaterial({color:0x21191a,roughness:0.96});
+  const gloveMat=new THREE.MeshStandardMaterial({color:0x171314,roughness:0.9});
+  const metalMat=new THREE.MeshStandardMaterial({color:0x9aa0a3,metalness:0.86,roughness:0.3});
+  const upper=new THREE.Group();group.add(upper);
+  const sleeve=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.12,0.42,10),sleeveMat);sleeve.rotation.x=-0.45;sleeve.position.set(-0.04,-0.16,0.08);upper.add(sleeve);
+  const wrist=new THREE.Group();wrist.position.set(0,-0.34,-0.02);upper.add(wrist);
+  const palm=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.13,0.12),gloveMat);palm.position.y=-0.02;wrist.add(palm);
+  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.032,0.042,0.25,9),gloveMat);grip.position.set(0,-0.10,-0.06);wrist.add(grip);
+  const guard=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.045,0.065),metalMat);guard.position.set(0,0.02,-0.06);wrist.add(guard);
+  const shape=new THREE.Shape();shape.moveTo(-0.045,0.02);shape.lineTo(0.045,0.02);shape.lineTo(0.038,0.52);shape.lineTo(0,0.78);shape.lineTo(-0.038,0.52);shape.closePath();
+  const blade=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:0.025,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:0.008,bevelThickness:0.008}),metalMat);
+  blade.position.set(0,0.04,-0.075);wrist.add(blade);
+  group.visible=false;return{group,upper,wrist};
 }
 
 function makeKillerMesh(){
@@ -2564,6 +2584,17 @@ function sync3D(dt){
   const myIsSurvivor = playerRole === 'survivor';
   survivorMesh.visible = !myIsSurvivor;
   killerMesh.visible = (playerRole !== 'killer' && !sandboxMode) || (sandboxMode && sandboxKillerActive);
+  if(firstPersonKillerRig){
+    const showKnife=playerRole==='killer'&&game.screen==='playing';
+    firstPersonKillerRig.group.visible=showKnife;
+    if(showKnife){
+      const duration=killer.attackAnimType==='swing'?0.52:0.5;
+      const active=killer.attackAnimTimer>0?THREE.MathUtils.clamp(1-killer.attackAnimTimer/duration,0,1):0;
+      const wind=Math.max(0,1-active/0.28),strike=Math.sin(THREE.MathUtils.clamp((active-0.18)/0.48,0,1)*Math.PI/2),follow=Math.max(0,Math.sin((active-0.58)/0.42*Math.PI));
+      firstPersonKillerRig.upper.rotation.set(-0.08-0.42*wind+0.82*strike-0.12*follow,0.02+0.10*strike,-0.08-0.18*wind+0.20*strike);
+      firstPersonKillerRig.wrist.rotation.set(-0.18*wind+0.30*strike-0.12*follow,0,0.06*wind-0.08*strike);
+    }
+  }
   if(firstPersonRepairRig){
     const showHands=myIsSurvivor&&survivor.state==='idle'&&!!(survivor.repairing&&survivor.repairing.type==='gen');
     firstPersonRepairRig.group.visible=showHands;
