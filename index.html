@@ -1121,21 +1121,21 @@ function buildWorld(){
     const runnerMat = new THREE.MeshStandardMaterial({color:0x604326,roughness:0.96});
     const ironMat = new THREE.MeshStandardMaterial({color:0x34383a,roughness:0.55,metalness:0.68});
     const length = PX(CFG.PALLET_LEN);
-    const slatCount = 3;
-    const slatWidth = 0.205;
-    const slatGap = 0.055;
+    const slatCount = 4;
+    const slatWidth = 0.17;
+    const slatGap = 0.035;
     const slatStep = slatWidth + slatGap;
     const slatStart = -((slatCount-1)*slatStep)/2;
 
-    // Horizontal face planks: after the upright pivot rotation these read as stacked pallet boards.
+    // Four broad horizontal boards form the upright pallet face; the pivot turns them into a vertical barrier.
     for(let j=0;j<slatCount;j++){
-      const y=slatStart+j*slatStep;
-      const plank=new THREE.Mesh(new THREE.BoxGeometry(length,slatWidth,0.095),deckFront[j]);
-      plank.position.set(0,y,0.105);
+      const z=slatStart+j*slatStep;
+      const plank=new THREE.Mesh(new THREE.BoxGeometry(length,0.095,slatWidth),deckFront[j]);
+      plank.position.set(0,0.105,z);
       plank.castShadow=true;plank.receiveShadow=true;pivot.add(plank);
 
-      const rear=new THREE.Mesh(new THREE.BoxGeometry(length*0.96,slatWidth*0.9,0.075),deckBack);
-      rear.position.set(0,y,-0.105);
+      const rear=new THREE.Mesh(new THREE.BoxGeometry(length*0.96,0.075,slatWidth*0.9),deckBack);
+      rear.position.set(0,-0.105,z);
       rear.castShadow=true;rear.receiveShadow=true;pivot.add(rear);
     }
 
@@ -1159,10 +1159,9 @@ function buildWorld(){
     // Small dark fasteners give the boards readable construction detail at game distance.
     for(const x of [-length*0.36,0,length*0.36]){
       for(let j=0;j<slatCount;j++){
-        const y=slatStart+j*slatStep;
+        const z=slatStart+j*slatStep;
         const nail=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.018,0.012,8),ironMat);
-        nail.rotation.x=Math.PI/2;
-        nail.position.set(x,y,0.158);
+        nail.position.set(x,0.158,z);
         pivot.add(nail);
       }
     }
