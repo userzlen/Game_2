@@ -249,6 +249,7 @@ const pallets = [
   makePallet(430,1370), makePallet(2020,1330), makePallet(700,790),
   makePallet(1760,790), makePallet(980,390), makePallet(980,1340),
 ];
+const hooks=[{x:420,y:820,stage:0,occupied:false},{x:1980,y:820,stage:0,occupied:false},{x:1200,y:500,stage:0,occupied:false},{x:1200,y:1190,stage:0,occupied:false}];
 const exitDoors = [
   {x:30,y:760,w:60,h:80,opened:false,openProgress:0},
   {x:2310,y:760,w:60,h:80,opened:false,openProgress:0},
@@ -284,13 +285,14 @@ const survivor = {
   abilityCooldown:0,speedBoostTimer:0,vaultBoostTimer:0,invisibleTimer:0,invulnerableTimer:0,
   itemCooldown:0,itemUsed:false,hitOnce:false,slowTimer:0,flashlightCharge:0,flashlightActive:false,
   health:'healthy',hitCooldown:0,healTimer:0,bloodTimer:0,animEvent:'idle',animTimer:0,isMoving:false,
+  downedTimer:0,hookStage:0,hookedTimer:0,hookIndex:-1,
   lastKnownPos:{x:0,y:0},isInChase:false,vx:0,vy:0,
   noTrailTimer:0,litheTimer:0,repairing:null,repairTimer:0,trailTimer:0,
 };
 const killer = {
   x:2250,y:1450,radius:CFG.KILLER_RADIUS,state:'idle',facing:Math.PI,pitch:0,walkPhase:0,
   stunTimer:0,breakTimer:0,breakTarget:null,attackCooldown:0,blindTimer:0,slowTimer:0,
-  attackHeldPrev:false,attackLungeTriggered:false,attackChargeTimer:0,attackLungeTimer:0,attackLungeDirX:1,attackLungeDirY:0,attackAnimTimer:0,attackAnimType:'',attackRecoveryTimer:0,attackHitTimer:0,attackHitPending:false,animEvent:'idle',animTimer:0,
+  attackHeldPrev:false,interactHeldPrev:false,carryingSurvivor:false,attackLungeTriggered:false,attackChargeTimer:0,attackLungeTimer:0,attackLungeDirX:1,attackLungeDirY:0,attackAnimTimer:0,attackAnimType:'',attackRecoveryTimer:0,attackHitTimer:0,attackHitPending:false,animEvent:'idle',animTimer:0,
   vaultTimer:0,vaultDuration:0,vaultFrom:{x:0,y:0},vaultTo:{x:0,y:0},
   path:null,pathTimer:0,stuckTimer:0,palletStuckTimer:0,
   dashCooldown:0,dashWindupTimer:0,dashTimer:0,dashDirX:1,dashDirY:0,
@@ -333,7 +335,7 @@ const SB = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, 
 let THREE = null;
 let scene, camera3d, renderer, sunLight;
 let survivorMesh, killerMesh, killerAuraLight, firstPersonRepairRig=null, firstPersonKillerRig=null, firstPersonFlashlightRig=null, flashlightWorldBeam=null;
-const palletMeshes = [], generatorMeshes = [], exitMeshes = [], windowMeshes = [];
+const palletMeshes = [], generatorMeshes = [], exitMeshes = [], windowMeshes = [], hookMeshes = [];
 const bloodTrailMeshes = [], trapMeshes = [], hatchetMeshes = [], smokeMeshes = [];
 const totemMesh = {group:null, light:null};
 let threeReady = false;
@@ -672,6 +674,7 @@ function broadcastState(){
       itemCooldown: survivor.itemCooldown,itemUsed:!!survivor.itemUsed,
       repairingGenerator: survivor.repairing && survivor.repairing.type === 'gen' ? generators.indexOf(survivor.repairing.ref) : -1,
       flashlightActive:survivor.flashlightActive,flashlightCharge:survivor.flashlightCharge,
+      downedTimer:survivor.downedTimer,hookStage:survivor.hookStage,hookedTimer:survivor.hookedTimer,hookIndex:survivor.hookIndex,
     },
     killer: {
       x: killer.x, y: killer.y, facing: killer.facing, pitch: killer.pitch, state: killer.state,
@@ -679,7 +682,7 @@ function broadcastState(){
       walkPhase: killer.walkPhase, invisibleTimer: killer.invisibleTimer,
       bloodlust: killer.bloodlust, abilityDisabledTimer: killer.abilityDisabledTimer,
       attackCooldown:killer.attackCooldown,attackRecoveryTimer:killer.attackRecoveryTimer,attackHitTimer:killer.attackHitTimer,attackHitPending:killer.attackHitPending,
-      blindTimer:killer.blindTimer,slowTimer:killer.slowTimer,attackAnimTimer:killer.attackAnimTimer,attackAnimType:killer.attackAnimType,animEvent:killer.animEvent,animTimer:killer.animTimer,
+      carryingSurvivor:!!killer.carryingSurvivor,blindTimer:killer.blindTimer,slowTimer:killer.slowTimer,attackAnimTimer:killer.attackAnimTimer,attackAnimType:killer.attackAnimType,animEvent:killer.animEvent,animTimer:killer.animTimer,
     },
     pallets: pallets.map(p => ({ state: p.state, fallTimer: p.fallTimer, breakTimer: p.breakTimer, visualAngle: p.visualAngle })),
     generators: generators.map(g => ({ progress: g.progress, done: g.done })),
@@ -717,7 +720,7 @@ function sendInput(){
 }
 
 function applyStateToWorld(state){
-  survivor.x = state.survivor.x; survivor.y = state.survivor.y;
+  survivor.x = state.survivor.x; survivor.y = state.survivor.y;survivor.downedTimer=Number(state.survivor.downedTimer)||0;survivor.hookStage=Number(state.survivor.hookStage)||0;survivor.hookedTimer=Number(state.survivor.hookedTimer)||0;survivor.hookIndex=Number.isInteger(state.survivor.hookIndex)?state.survivor.hookIndex:-1;
   survivor.facing = state.survivor.facing; survivor.pitch = state.survivor.pitch;
   survivor.state = state.survivor.state; survivor.health = state.survivor.health;
   survivor.animEvent=state.survivor.animEvent||'idle';survivor.animTimer=state.survivor.animTimer||0;survivor.isMoving=!!state.survivor.isMoving;
@@ -731,7 +734,7 @@ function applyStateToWorld(state){
   survivor.flashlightActive=!!state.survivor.flashlightActive;survivor.flashlightCharge=state.survivor.flashlightCharge||0;
   survivor.repairing = Number.isInteger(state.survivor.repairingGenerator) && state.survivor.repairingGenerator >= 0 && generators[state.survivor.repairingGenerator] ? {type:'gen',ref:generators[state.survivor.repairingGenerator]} : null;
 
-  killer.x = state.killer.x; killer.y = state.killer.y;
+  killer.x = state.killer.x; killer.y = state.killer.y;killer.carryingSurvivor=!!state.killer.carryingSurvivor;
   killer.facing = state.killer.facing; killer.pitch = state.killer.pitch;
   killer.attackCooldown=Math.max(0,Number(state.killer.attackCooldown)||0);
   killer.attackRecoveryTimer=Math.max(0,Number(state.killer.attackRecoveryTimer)||0);
@@ -785,8 +788,8 @@ function initThree(){
   if (!CFG.W || !CFG.H){ CFG.W = window.innerWidth || 1280; CFG.H = window.innerHeight || 720; }
 
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0a1018);
-  scene.fog = new THREE.FogExp2(0x111923, 0.022);
+  scene.background = new THREE.Color(0x090d18);
+  scene.fog = new THREE.FogExp2(0x151b2a, 0.018);
 
   camera3d = new THREE.PerspectiveCamera(75, CFG.W / Math.max(1, CFG.H), 0.1, 300);
   const flashlightLight=new THREE.SpotLight(0xddeeff,0,PX(CFG.FLASHLIGHT_RANGE),0.34,0.62,1);flashlightLight.position.set(0.12,-0.12,-0.18);flashlightLight.target.position.set(0,0,-1);camera3d.add(flashlightLight);camera3d.add(flashlightLight.target);
@@ -804,9 +807,9 @@ function initThree(){
   if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.setClearColor(0x0a1018, 1);
 
-  scene.add(new THREE.HemisphereLight(0x8497ad,0x24251d,0.72));
-  scene.add(new THREE.AmbientLight(0x65738a, 0.48));
-  sunLight = new THREE.DirectionalLight(0xc0d8ff, 1.2);
+  scene.add(new THREE.HemisphereLight(0x63799b,0x171b20,0.38));
+  scene.add(new THREE.AmbientLight(0x3d4b68, 0.26));
+  sunLight = new THREE.DirectionalLight(0x8fa8d5, 0.24);
   sunLight.position.set(15, 40, 15);
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.set(1024, 1024);
@@ -818,7 +821,7 @@ function initThree(){
   scene.add(sunLight);
   scene.add(sunLight.target);
 
-  const moon = new THREE.DirectionalLight(0x6688cc, 0.4);
+  const moon = new THREE.DirectionalLight(0x7899d0, 0.58);
   moon.position.set(-30, 20, -20); scene.add(moon);
 
   const groundGeo = new THREE.PlaneGeometry(PX(2400), PX(1600), 80, 80);
@@ -826,14 +829,14 @@ function initThree(){
   const colors = [];
   const pos = groundGeo.attributes.position;
   for (let i = 0; i < pos.count; i++){
-    const v = 0.28 + Math.random() * 0.08;
+    const v = 0.16 + Math.random() * 0.045;
     pos.setY(i,Math.sin(pos.getX(i)*0.7)*0.012+Math.cos(pos.getZ(i)*0.55)*0.01+(Math.random()-0.5)*0.012);
-    colors.push(v * 0.72, v * 1.05, v * 0.62);
+    colors.push(v * 0.70, v * 0.82, v * 1.02);
   }
   groundGeo.attributes.position.needsUpdate=true;groundGeo.computeVertexNormals();
   groundGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
   const groundCanvas=document.createElement('canvas');groundCanvas.width=512;groundCanvas.height=512;
-  const groundCtx=groundCanvas.getContext('2d');groundCtx.fillStyle='#b9b38a';groundCtx.fillRect(0,0,512,512);
+  const groundCtx=groundCanvas.getContext('2d');groundCtx.fillStyle='#4b514d';groundCtx.fillRect(0,0,512,512);
   for(let i=0;i<4200;i++){
     const x=Math.random()*512,y=Math.random()*512,r=0.5+Math.random()*3;
     groundCtx.fillStyle=i%5===0?'rgba(52,63,39,0.24)':(i%3===0?'rgba(83,65,42,0.18)':'rgba(224,213,160,0.16)');
@@ -1097,8 +1100,9 @@ function buildWorld(){
       post.castShadow=true;post.receiveShadow=true;scene.add(post);
     }
   }
+  const lanternSpots=[[300,300],[800,300],[1200,300],[1600,300],[2100,300],[300,800],[800,800],[1600,800],[2100,800],[300,1300],[800,1450],[1600,1450],[2100,1300]];
+  for(const [x,y] of lanternSpots){const post=new THREE.Group();const iron=new THREE.MeshStandardMaterial({color:0x252b35,metalness:0.72,roughness:0.55});const wood=new THREE.MeshStandardMaterial({color:0x493a2c,roughness:0.92});const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.085,2.8,8),iron);stem.position.y=1.4;stem.castShadow=true;post.add(stem);const arm=new THREE.Mesh(new THREE.BoxGeometry(0.52,0.07,0.07),iron);arm.position.set(0.22,2.68,0);post.add(arm);const cap=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.17,0.13,8),iron);cap.position.set(0.43,2.59,0);post.add(cap);const glass=new THREE.Mesh(new THREE.SphereGeometry(0.13,12,10),new THREE.MeshStandardMaterial({color:0xffd28a,emissive:0xffa64d,emissiveIntensity:1.5,roughness:0.28}));glass.position.set(0.43,2.40,0);post.add(glass);const glow=new THREE.PointLight(0xffb86b,0.9,8.5,1.8);glow.position.set(0.43,2.38,0);post.add(glow);const base=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.25,0.18,8),wood);base.position.y=0.09;post.add(base);post.position.set(PX(x),0,PX(y));scene.add(post);}
   for (const win of windows){
-    const g = new THREE.Group();
     const fMat = new THREE.MeshStandardMaterial({color:0x6b4a2e, roughness:0.86});
     const openingDepth=PX(win.h);
     const sill = new THREE.Mesh(new THREE.BoxGeometry(0.42,0.12,openingDepth+0.18),fMat);
@@ -1114,57 +1118,16 @@ function buildWorld(){
   for (const p of pallets){
     const group = new THREE.Group();
     const pivot = new THREE.Group();
-    const deckFront = [0xa77d43,0x98703b,0xb0874b,0x9c7440,0xad8249].map(color =>
-      new THREE.MeshStandardMaterial({color,roughness:0.9})
-    );
-    const deckBack = new THREE.MeshStandardMaterial({color:0x76542f,roughness:0.94});
-    const runnerMat = new THREE.MeshStandardMaterial({color:0x604326,roughness:0.96});
-    const ironMat = new THREE.MeshStandardMaterial({color:0x34383a,roughness:0.55,metalness:0.68});
-    const length = PX(CFG.PALLET_LEN);
-    const slatCount = 4;
-    const slatWidth = 0.17;
-    const slatGap = 0.035;
-    const slatStep = slatWidth + slatGap;
-    const slatStart = -((slatCount-1)*slatStep)/2;
-
-    // Four broad horizontal boards form the upright pallet face; the pivot turns them into a vertical barrier.
-    for(let j=0;j<slatCount;j++){
-      const z=slatStart+j*slatStep;
-      const plank=new THREE.Mesh(new THREE.BoxGeometry(length,0.095,slatWidth),deckFront[j]);
-      plank.position.set(0,0.105,z);
-      plank.castShadow=true;plank.receiveShadow=true;pivot.add(plank);
-
-      const rear=new THREE.Mesh(new THREE.BoxGeometry(length*0.96,0.075,slatWidth*0.9),deckBack);
-      rear.position.set(0,-0.105,z);
-      rear.castShadow=true;rear.receiveShadow=true;pivot.add(rear);
-    }
-
-    // Three thick vertical stringers form the characteristic pallet structure.
-    for(const x of [-length*0.36,0,length*0.36]){
-      const upright=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.20,0.82),runnerMat);
-      upright.position.set(x,0,0);upright.castShadow=true;upright.receiveShadow=true;pivot.add(upright);
-    }
-
-    // Three solid runners tie both faces together and remain visible through the gaps.
-    for(const x of [-length*0.36,0,length*0.36]){
-      const runner=new THREE.Mesh(new THREE.BoxGeometry(0.25,0.22,0.88),runnerMat);
-      runner.position.set(x,0,0);
-      runner.castShadow=true;runner.receiveShadow=true;pivot.add(runner);
-      for(const z of [-0.43,0.43]){
-        const foot=new THREE.Mesh(new THREE.BoxGeometry(0.30,0.24,0.16),runnerMat);
-        foot.position.set(x,0,z);foot.castShadow=true;pivot.add(foot);
-      }
-    }
-
-    // Small dark fasteners give the boards readable construction detail at game distance.
-    for(const x of [-length*0.36,0,length*0.36]){
-      for(let j=0;j<slatCount;j++){
-        const z=slatStart+j*slatStep;
-        const nail=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.018,0.012,8),ironMat);
-        nail.position.set(x,0.158,z);
-        pivot.add(nail);
-      }
-    }
+    const plankMats=[0x8b5c32,0x704626,0x9a6a3b].map(color=>new THREE.MeshStandardMaterial({color,roughness:0.96}));
+    const backMat=new THREE.MeshStandardMaterial({color:0x50351f,roughness:0.98});
+    const runnerMat=new THREE.MeshStandardMaterial({color:0x38291f,roughness:0.98});
+    const ironMat=new THREE.MeshStandardMaterial({color:0x25292d,roughness:0.58,metalness:0.62});
+    const length=PX(CFG.PALLET_LEN);
+    const boardZ=[-0.245,0,0.245];
+    boardZ.forEach((z,j)=>{const boardLength=length*(j===1?1:0.94);const plank=new THREE.Mesh(new THREE.BoxGeometry(boardLength,0.13,0.19),plankMats[j]);plank.position.set(j===0?-0.025:(j===2?0.025:0),0.10,z);plank.rotation.y=(j-1)*0.018;plank.castShadow=true;plank.receiveShadow=true;pivot.add(plank);const rear=new THREE.Mesh(new THREE.BoxGeometry(boardLength*0.94,0.09,0.16),backMat);rear.position.set(0,-0.105,z);rear.castShadow=true;rear.receiveShadow=true;pivot.add(rear);for(const x of [-length*0.35,0,length*0.35]){const nail=new THREE.Mesh(new THREE.CylinderGeometry(0.018,0.018,0.014,8),ironMat);nail.position.set(x,0.172,z);pivot.add(nail);}});
+    for(const x of [-length*0.34,length*0.34]){const upright=new THREE.Mesh(new THREE.BoxGeometry(0.19,0.25,0.82),runnerMat);upright.position.set(x,-0.005,0);upright.castShadow=true;upright.receiveShadow=true;pivot.add(upright);}
+    const brace=new THREE.Mesh(new THREE.BoxGeometry(length*0.58,0.12,0.12),backMat);brace.position.set(0,-0.16,0.02);brace.rotation.y=-0.48;brace.castShadow=true;pivot.add(brace);
+    for(const x of [-length*0.34,0,length*0.34]){const foot=new THREE.Mesh(new THREE.BoxGeometry(0.28,0.25,0.20),runnerMat);foot.position.set(x,0,-0.47);foot.castShadow=true;pivot.add(foot);}
 
     pivot.rotation.x = Math.PI / 2.1;
     group.add(pivot);
@@ -1172,6 +1135,7 @@ function buildWorld(){
     scene.add(group);
     palletMeshes.push({group, pivot, pallet:p});
   }
+  for(const h of hooks){const group=new THREE.Group();const timber=new THREE.MeshStandardMaterial({color:0x34251d,roughness:0.96});const iron=new THREE.MeshStandardMaterial({color:0x252a31,metalness:0.76,roughness:0.42});const post=new THREE.Mesh(new THREE.BoxGeometry(0.20,3.25,0.20),timber);post.position.y=1.62;post.castShadow=true;group.add(post);const brace=new THREE.Mesh(new THREE.BoxGeometry(0.13,1.25,0.13),timber);brace.position.set(-0.36,0.66,0);brace.rotation.z=-0.48;group.add(brace);const beam=new THREE.Mesh(new THREE.BoxGeometry(1.05,0.16,0.16),timber);beam.position.set(0.40,3.02,0);beam.castShadow=true;group.add(beam);const curve=new THREE.CatmullRomCurve3([new THREE.Vector3(0.83,2.98,0),new THREE.Vector3(1.00,2.80,0),new THREE.Vector3(0.99,2.55,0),new THREE.Vector3(0.80,2.48,0),new THREE.Vector3(0.70,2.62,0)]);const metalHook=new THREE.Mesh(new THREE.TubeGeometry(curve,18,0.045,8,false),iron);metalHook.castShadow=true;group.add(metalHook);const chain=new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,0.34,8),iron);chain.position.set(0.80,2.80,0.10);group.add(chain);group.position.set(PX(h.x),0,PX(h.y));scene.add(group);hookMeshes.push({group,hook:h});}
   for (const gen of generators){
     const g = new THREE.Group();
     const darkMetal = new THREE.MeshStandardMaterial({color:0x252b30,roughness:0.58,metalness:0.78});
@@ -1884,7 +1848,7 @@ function tryHitSurvivor(ignoreAttackCooldown=false){
   const k = killer;
   if (!ignoreAttackCooldown && k.attackCooldown > 0) return false;
   const distS = Math.hypot(survivor.x-k.x, survivor.y-k.y);
-  if (distS >= CFG.ATTACK_RANGE || survivor.state === 'vaulting' || survivor.state === 'healing') return false;
+  if (distS >= CFG.ATTACK_RANGE || ['vaulting','healing','hooked','carried','downed'].includes(survivor.state)) return false;
   if (survivor.invulnerableTimer > 0 || survivor.hitCooldown > 0) return false;
   k.attackRecoveryTimer=Math.max(k.attackRecoveryTimer,1.05);
   k.attackHitPending=false;k.attackHitTimer=0;
@@ -1906,11 +1870,12 @@ function tryHitSurvivor(ignoreAttackCooldown=false){
     killer.path = null; killer.chaseCommitTimer = CFG.INJURED_CHASE_COMMIT;
     screenShake = 10; game.hint = 'РАНЕН!'; game.hintTime = 2.5; return true;
   }
-  game.screen = 'lose'; screenShake = 20;
-  if (MP.role === 'host' && MP.connReady) MP.conn.send({type:'end', screen:'lose'});
-  showEndScreen('ПОЙМАН', 'Выживший пойман', '#ff5050');
-  return true;
+  survivor.health='downed';survivor.state='downed';survivor.downedTimer=90;survivor.hitCooldown=1.4;survivor.animEvent='downed';survivor.animTimer=1;survivor.isMoving=false;survivor.repairing=null;survivor.speedBoostTimer=0;survivor.invisibleTimer=0;killer.path=null;killer.carryingSurvivor=false;screenShake=16;game.hint='ПОВЕРЖЕН — убийца может поднять вас';game.hintTime=3;return true;
 }
+
+function killerCarryOrHook(){const k=killer,s=survivor;if(k.carryingSurvivor){let best=-1,bestD=Infinity;hooks.forEach((h,i)=>{const d=Math.hypot(h.x-k.x,h.y-k.y);if(!h.occupied&&d<bestD){bestD=d;best=i;}});if(best>=0&&bestD<105){const h=hooks[best];h.occupied=true;h.stage=(h.stage||0)+1;s.state='hooked';s.health='downed';s.hookIndex=best;s.hookStage=h.stage;s.hookedTimer=42;s.downedTimer=0;k.carryingSurvivor=false;k.animEvent='hook';k.animTimer=0.8;game.hint='Выживший повешен на крюк';game.hintTime=3;return true;}return false;}if(s.state==='downed'&&Math.hypot(s.x-k.x,s.y-k.y)<78){k.carryingSurvivor=true;s.state='carried';s.animEvent='carried';s.animTimer=0.5;game.hint='Выживший поднят — отнесите его к крюку';game.hintTime=3;return true;}return false;}
+function updateCarriedSurvivor(){if(!killer.carryingSurvivor||survivor.state!=='carried')return;const a=killer.facing+Math.PI*0.78;survivor.x=killer.x+Math.cos(a)*42;survivor.y=killer.y+Math.sin(a)*42;survivor.facing=killer.facing;survivor.isMoving=killer.isMoving;}
+function updateHookState(dt){if(survivor.state==='downed'){survivor.downedTimer=Math.max(0,(survivor.downedTimer||90)-dt);if(survivor.downedTimer<=0){game.screen='lose';if(MP.role==='host'&&MP.connReady)MP.conn.send({type:'end',screen:'lose'});showEndScreen('ПОЙМАН','Выживший не смог выбраться','#ff5050');}}else if(survivor.state==='hooked'){survivor.hookedTimer=Math.max(0,(survivor.hookedTimer||42)-dt);if(survivor.hookedTimer<=0){const idx=survivor.hookIndex;if(hooks[idx]){hooks[idx].occupied=false;hooks[idx].stage=Math.max(hooks[idx].stage||0,survivor.hookStage||1);}if((survivor.hookStage||1)>=2){game.screen='lose';if(MP.role==='host'&&MP.connReady)MP.conn.send({type:'end',screen:'lose'});showEndScreen('ПОЙМАН','Выживший погиб на крюке','#ff5050');}else{survivor.state='downed';survivor.health='downed';survivor.downedTimer=45;survivor.hookIndex=-1;survivor.animEvent='downed';game.hint='Вы сорвались с крюка — вы ещё можете ползти';game.hintTime=3;}}}}
 
 function updateKillerAI(dt){
   const k = killer;
@@ -2069,6 +2034,8 @@ function updateKillerPlayer(dt, input){
   const k = killer;
   // Capture the mouse button edges before any movement/state early-return.
   // Otherwise the lunge branch skips the release edge and a held click can desync the attack state.
+  const interactNow=!!input.e,interactPressed=interactNow&&!k.interactHeldPrev;k.interactHeldPrev=interactNow;
+  if(interactPressed&&killerCarryOrHook())return;
   const attackNow=!!input.attack;
   const attackPressed=attackNow&&!k.attackHeldPrev;
   const attackReleased=!attackNow&&k.attackHeldPrev;
@@ -2177,7 +2144,7 @@ function updateKillerPlayer(dt, input){
   if (len > 0) {
     mx /= len; my /= len;
     k.walkPhase += dt * 12;
-    const speed = computeKillerSpeed(), step = speed * dt;
+    const speed = computeKillerSpeed()*(k.carryingSurvivor?0.72:1), step = speed * dt;
     const ox = k.x, oy = k.y;
     k.x += mx*step; k.y += my*step;
     collideKiller(k);
@@ -2238,6 +2205,10 @@ function updateSurvivorInput(dt, input){
   if (s.noTrailTimer>0) s.noTrailTimer-=dt;
   if (s.litheTimer>0) s.litheTimer-=dt;
   if (s.health==='injured'&&s.state!=='healing'&&s.bloodTimer<=0) s.bloodTimer=0.8;
+  if(s.state==='hooked'||s.state==='carried')return;
+  if(s.state==='downed'){
+    const fX=Math.cos(s.facing),fY=Math.sin(s.facing),rX=Math.cos(s.facing+Math.PI/2),rY=Math.sin(s.facing+Math.PI/2);let mx=0,my=0;if(input.w){mx+=fX;my+=fY;}if(input.s){mx-=fX;my-=fY;}if(input.a){mx-=rX;my-=rY;}if(input.d){mx+=rX;my+=rY;}const len=Math.hypot(mx,my);if(len>0){s.isMoving=true;mx/=len;my/=len;const step=CFG.SURVIVOR_SPEED*0.28*dt;s.x+=mx*step;collideSurvivor(s);s.y+=my*step;collideSurvivor(s);s.walkPhase+=dt*4;}return;
+  }
   if (s.state==='healing'){
     s.healTimer-=dt;
     if (s.healTimer<=0){s.health='healthy';s.state='idle';game.hint='Залечен!';game.hintTime=1.5;}
@@ -2453,7 +2424,7 @@ function checkWin(){
 function tryInteractHold(input, dt=1/60){
   dt=Math.max(0,Math.min(0.05,Number(dt)||0));
   const s=survivor;
-  if (s.state==='vaulting'||s.state==='healing') return false;
+  if (s.state==='vaulting'||s.state==='healing'||s.state==='downed'||s.state==='hooked'||s.state==='carried') return false;
   let near=null;
   for(const gen of generators){if(gen.done)continue;if(Math.hypot(gen.x-s.x,gen.y-s.y)<CFG.GENERATOR_INTERACT&&lineOfSightFree(s.x,s.y,gen.x,gen.y)){near={type:'gen',ref:gen};break;}}
   if (!near&&!totem.broken&&Math.hypot(totem.x-s.x,totem.y-s.y)<CFG.TOTEM_INTERACT&&lineOfSightFree(s.x,s.y,totem.x,totem.y)) near={type:'totem',ref:totem};
@@ -2820,7 +2791,7 @@ function sync3D(dt){
       u.ringMat.color.setHex(survivor.health==='injured'?0xff3333:0x66aaff);
       u.ringMat.opacity = survivor.invisibleTimer>0?0.2:0.6;
     }
-    if(survivor.state==='vaulting'){
+    if(survivor.state==='downed'){survivorMesh.position.y=0.16;survivorMesh.rotation.x=-Math.PI/2.05;survivorMesh.rotation.z=Math.sin(performance.now()/420)*0.035;if(u.bodyPivot)u.bodyPivot.rotation.x=0.10;if(u.headPivot)u.headPivot.rotation.x=-0.10;if(u.lArm)u.lArm.rotation.x=-0.35;if(u.rArm)u.rArm.rotation.x=-0.35;if(u.lLeg)u.lLeg.rotation.x=0.12;if(u.rLeg)u.rLeg.rotation.x=-0.12;}else if(survivor.state==='hooked'){const h=hooks[survivor.hookIndex];if(h)survivorMesh.position.set(PX(h.x),0.38,PX(h.y));survivorMesh.rotation.x=0.08;survivorMesh.rotation.z=0.12;if(u.lArm)u.lArm.rotation.x=-1.45;if(u.rArm)u.rArm.rotation.x=-1.55;if(u.lElbow)u.lElbow.rotation.x=-0.55;if(u.rElbow)u.rElbow.rotation.x=-0.60;}else if(survivor.state==='carried'){survivorMesh.position.y=0.72;survivorMesh.rotation.x=0.62;survivorMesh.rotation.z=0.12;if(u.lArm)u.lArm.rotation.x=-1.65;if(u.rArm)u.rArm.rotation.x=-1.45;if(u.lKnee)u.lKnee.rotation.x=0.55;if(u.rKnee)u.rKnee.rotation.x=0.45;}else if(survivor.state==='vaulting'){
       const t=survivor.vaultTimer/survivor.vaultDuration,arc=Math.sin(t*Math.PI);
       survivorMesh.position.y=arc*1.2;survivorMesh.rotation.x=arc*0.48;
       if(u.lArm)u.lArm.rotation.x=-1.55+arc*0.55;if(u.rArm)u.rArm.rotation.x=-1.7+arc*0.6;
@@ -3057,7 +3028,7 @@ function updateHUD(){
   const roleText = document.getElementById('roleText');
   if (roleText){ roleText.textContent = playerRole === 'survivor' ? 'ВЫЖИВШИЙ' : 'УБИЙЦА'; roleText.className = 'hud-value ' + (playerRole === 'survivor' ? 'blue' : 'red'); }
   const hp=document.getElementById('hpText');
-  if (hp){ hp.textContent = survivor.health==='injured'?'РАНЕН':'ЗДОРОВ'; hp.className='hud-value '+(survivor.health==='injured'?'red':'green'); }
+  if (hp){ hp.textContent=survivor.state==='hooked'?'НА КРЮКЕ':(survivor.state==='carried'?'НЕСУТ':(survivor.state==='downed'?'ПОВЕРЖЕН':(survivor.health==='injured'?'РАНЕН':'ЗДОРОВ')));hp.className='hud-value '+(['hooked','carried','downed'].includes(survivor.state)||survivor.health==='injured'?'red':'green'); }
   const genRow=document.getElementById('genRow');
   if (genRow){
     if (genRow.children.length===0) for(let i=0;i<CFG.GENERATOR_COUNT;i++){const d=document.createElement('div');d.className='gen-dot';genRow.appendChild(d);}
@@ -3084,8 +3055,8 @@ function updateHUD(){
 
   const bottom = document.getElementById('bottom');
   if (bottom){
-    if (playerRole === 'survivor') bottom.textContent = 'ЛКМ — захват мыши · WASD — движение · E — действие · Space — способность · F — предмет · Esc — пауза';
-    else bottom.textContent = 'ЛКМ — атака/захват мыши · WASD — движение · Space — способность · E — перелезть/сломать · Esc — пауза';
+    if (playerRole === 'survivor') bottom.textContent=survivor.state==='downed'?'WASD — ползти · Ожидайте подбора':(survivor.state==='hooked'?'ВЫ НА КРЮКЕ · ОЖИДАНИЕ СТАДИИ':'ЛКМ — захват мыши · WASD — движение · E — действие · Space — способность · F — предмет · Esc — пауза');
+    else bottom.textContent=killer.carryingSurvivor?'WASD — нести выжившего · E — повесить на ближайший крюк':'ЛКМ — атака/захват мыши · WASD — движение · E — поднять / повесить · Space — способность · Esc — пауза';
   }
 
   crosshair.classList.toggle('show', game.screen === 'playing' && document.pointerLockElement === canvas && (!sandboxMode || sandboxHudVisible));
@@ -3500,6 +3471,7 @@ function loop(now){
         }
       }
 
+      updateCarriedSurvivor();updateHookState(dt);
       killer.blindTimer=Math.max(0,killer.blindTimer-dt);killer.slowTimer=Math.max(0,killer.slowTimer-dt);killer.attackAnimTimer=Math.max(0,killer.attackAnimTimer-dt);
       survivor.animTimer=Math.max(0,(survivor.animTimer||0)-dt);killer.animTimer=Math.max(0,(killer.animTimer||0)-dt);
       updatePallets(dt); updateWindows(dt); updateSmoke(dt);
