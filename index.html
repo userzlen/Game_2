@@ -1896,6 +1896,7 @@ function updateKillerAI(dt){
 
   const losClear = killerLOSClear() && !survivor.invisibleTimer && k.blindTimer<=0;
   const distToS = Math.hypot(survivor.x - k.x, survivor.y - k.y);
+  if(survivor.state==='downed'&&!k.carryingSurvivor&&distToS<78){k.carryingSurvivor=true;survivor.state='carried';survivor.animEvent='carried';survivor.animTimer=0.5;game.hint='Убийца поднял выжившего';game.hintTime=2;return;}
   const timeSinceSeen = k.lastSeen ? game.time - k.lastSeenTime : 999;
   if (losClear && survivor.state !== 'vaulting') {
     k.lastSeen = {x: survivor.x, y: survivor.y}; k.lastSeenTime = game.time;
@@ -1967,7 +1968,7 @@ function updateKillerAI(dt){
     if (killer.hasBlink&&k.blinkCooldown<=0&&distToS>250&&distToS<400&&losClear&&!survivor.invisibleTimer) tryKillerBlink();
     if (killer.hasInvisible&&k.invisibleCooldown<=0&&!losClear&&distToS<500&&k.invisibleTimer<=0) tryKillerInvisible();
   }
-  if (distToS < 350 && losClear && k.state==='idle' && survivor.state!=='vaulting') {
+  if (!k.carryingSurvivor && distToS < 350 && losClear && k.state==='idle' && survivor.state!=='vaulting' && survivor.state!=='downed') {
     let tx=survivor.x,ty=survivor.y;
     if (distToS>100){const look=Math.min(CFG.INTERCEPT_MAX,distToS/computeKillerSpeed())*CFG.INTERCEPT_LOOKAHEAD;tx=survivor.x+survivor.vx*look;ty=survivor.y+survivor.vy*look;tx=Math.max(30,Math.min(2370,tx));ty=Math.max(30,Math.min(1570,ty));}
     const ddx=tx-k.x,ddy=ty-k.y,dd=Math.hypot(ddx,ddy);
@@ -1996,6 +1997,7 @@ function updateKillerAI(dt){
       else {if(!k.searchTarget||Math.hypot(k.x-k.searchTarget.x,k.y-k.searchTarget.y)<60){const cand=PATROL_POINTS.filter(p=>!k.searchTarget||(p.x!==k.searchTarget.x||p.y!==k.searchTarget.y));k.searchTarget=cand[Math.floor(Math.random()*cand.length)];}tx=k.searchTarget.x;ty=k.searchTarget.y;}
     }
   }
+  if(k.carryingSurvivor){let nearest=null,nearestD=Infinity;for(const h of hooks){if(h.occupied)continue;const d=Math.hypot(h.x-k.x,h.y-k.y);if(d<nearestD){nearestD=d;nearest=h;}}if(nearest){tx=nearest.x;ty=nearest.y;if(nearestD<105)killerCarryOrHook();}}
   k.pathTimer -= dt;
   if (!k.path||k.path.length===0||k.pathTimer<=0){
     const np=findPath(k,{x:tx,y:ty});
