@@ -1567,24 +1567,29 @@ function makeFirstPersonFlashlightRig(){
 }
 
 function makeFirstPersonKillerRig(){
-  const group=new THREE.Group();group.position.set(0.42,-0.28,-0.82);group.rotation.set(-0.18,-0.06,-0.04);
+  const group=new THREE.Group();group.position.set(0.38,-0.24,-0.74);group.rotation.set(-0.12,-0.045,-0.025);
   const sleeveMat=new THREE.MeshStandardMaterial({color:0x21191a,roughness:0.96});
   const gloveMat=new THREE.MeshStandardMaterial({color:0x171314,roughness:0.9});
-  const metalMat=new THREE.MeshStandardMaterial({color:0x65d9ff,emissive:0x147ca8,emissiveIntensity:0.9,metalness:0.35,roughness:0.24});
+  const leatherMat=new THREE.MeshStandardMaterial({color:0x302522,roughness:0.88});
+  const bladeMat=new THREE.MeshStandardMaterial({color:0xb9c4ca,metalness:0.78,roughness:0.24});
+  const edgeMat=new THREE.MeshStandardMaterial({color:0x687982,metalness:0.72,roughness:0.3});
   const upper=new THREE.Group();group.add(upper);
-  const sleeve=new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.12,0.42,10),sleeveMat);sleeve.rotation.x=-0.45;sleeve.position.set(-0.04,-0.16,0.08);upper.add(sleeve);
-  const wrist=new THREE.Group();wrist.position.set(0,-0.34,-0.02);upper.add(wrist);
-  const palm=new THREE.Mesh(new THREE.BoxGeometry(0.13,0.13,0.12),gloveMat);palm.position.y=-0.02;wrist.add(palm);
-  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.032,0.042,0.25,9),gloveMat);grip.position.set(0,-0.10,-0.06);wrist.add(grip);
-  const guard=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.045,0.065),metalMat);guard.position.set(0,0.02,-0.06);wrist.add(guard);
-  const shape=new THREE.Shape();shape.moveTo(-0.075,0.02);shape.lineTo(0,0.14);shape.lineTo(0.075,0.02);shape.lineTo(0.025,0.46);shape.lineTo(0,0.72);shape.lineTo(-0.025,0.46);shape.closePath();
-  const shard=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:0.055,bevelEnabled:true,bevelSegments:2,steps:1,bevelSize:0.018,bevelThickness:0.012}),metalMat);
-  shard.position.set(0,0.04,-0.075);wrist.add(shard);
-  const glow=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.46,0.018),new THREE.MeshBasicMaterial({color:0x9df0ff,transparent:true,opacity:0.72}));
-  glow.position.set(0,0.38,-0.012);wrist.add(glow);
-  group.visible=false;return{group,upper,wrist};
+  const sleeve=new THREE.Mesh(new THREE.CylinderGeometry(0.095,0.125,0.43,12),sleeveMat);sleeve.rotation.x=-0.43;sleeve.position.set(-0.035,-0.16,0.075);upper.add(sleeve);
+  const cuff=new THREE.Mesh(new THREE.TorusGeometry(0.092,0.018,7,14),leatherMat);cuff.rotation.x=Math.PI/2;cuff.position.set(-0.01,-0.345,0.025);upper.add(cuff);
+  const wrist=new THREE.Group();wrist.position.set(0,-0.34,-0.025);upper.add(wrist);
+  const palm=new THREE.Mesh(new THREE.BoxGeometry(0.145,0.14,0.125),gloveMat);palm.position.set(0,-0.035,-0.015);wrist.add(palm);
+  const grip=new THREE.Mesh(new THREE.CylinderGeometry(0.037,0.043,0.24,10),leatherMat);grip.position.set(0,-0.105,-0.075);grip.rotation.x=-0.12;wrist.add(grip);
+  const pommel=new THREE.Mesh(new THREE.SphereGeometry(0.047,10,8),edgeMat);pommel.position.set(0,-0.232,-0.075);wrist.add(pommel);
+  const guard=new THREE.Mesh(new THREE.BoxGeometry(0.225,0.052,0.075),edgeMat);guard.position.set(0,0.025,-0.075);wrist.add(guard);
+  const guardCap=new THREE.Mesh(new THREE.BoxGeometry(0.15,0.018,0.085),bladeMat);guardCap.position.set(0,0.052,-0.075);wrist.add(guardCap);
+  const shape=new THREE.Shape();shape.moveTo(-0.052,0.045);shape.lineTo(0.052,0.045);shape.lineTo(0.044,0.47);shape.lineTo(0.022,0.62);shape.lineTo(0,0.72);shape.lineTo(-0.022,0.62);shape.lineTo(-0.044,0.47);shape.closePath();
+  const blade=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:0.035,bevelEnabled:true,bevelSegments:2,steps:1,bevelSize:0.009,bevelThickness:0.008}),bladeMat);
+  blade.position.set(0,0.035,-0.095);wrist.add(blade);
+  const fuller=new THREE.Mesh(new THREE.BoxGeometry(0.012,0.43,0.006),edgeMat);fuller.position.set(0,0.34,-0.055);wrist.add(fuller);
+  for(let i=0;i<3;i++){const finger=new THREE.Mesh(new THREE.CapsuleGeometry(0.022,0.075,3,6),gloveMat);finger.position.set(-0.075+i*0.025,-0.075,-0.005);finger.rotation.z=-0.55;wrist.add(finger);}
+  const thumb=new THREE.Mesh(new THREE.CapsuleGeometry(0.023,0.07,3,6),gloveMat);thumb.position.set(0.085,-0.035,-0.045);thumb.rotation.z=0.82;wrist.add(thumb);
+  group.visible=false;return{group,upper,wrist,blade};
 }
-
 function makeKillerMesh(){
   const g=new THREE.Group();
   const coat=new THREE.MeshStandardMaterial({color:0x20191a,roughness:0.98});coat.skinning=true;
@@ -2704,10 +2709,15 @@ function sync3D(dt){
     if(showKnife){
       const duration=killer.attackAnimType==='swing'?0.52:0.5;
       const active=killer.attackAnimTimer>0?THREE.MathUtils.clamp(1-killer.attackAnimTimer/duration,0,1):0;
-      const wind=Math.max(0,1-active/0.28),strike=Math.sin(THREE.MathUtils.clamp((active-0.18)/0.48,0,1)*Math.PI/2),follow=Math.max(0,Math.sin((active-0.58)/0.42*Math.PI));
-      const idleBob=Math.sin(performance.now()/180)*0.018;
-      firstPersonKillerRig.upper.rotation.set(-0.08-0.42*wind+0.82*strike-0.12*follow+idleBob,0.02+0.10*strike,-0.08-0.18*wind+0.20*strike);
-      firstPersonKillerRig.wrist.rotation.set(-0.18*wind+0.30*strike-0.12*follow+idleBob,0,0.06*wind-0.08*strike);
+      const charge= killer.attackLungeTimer>0?1:THREE.MathUtils.clamp(killer.attackChargeTimer/Math.max(0.01,CFG.ATTACK_CHARGE_TIME),0,1);
+      const wind=Math.max(charge*0.72,Math.max(0,1-active/0.30));
+      const strike=Math.sin(THREE.MathUtils.clamp((active-0.20)/0.43,0,1)*Math.PI/2);
+      const follow=Math.max(0,Math.sin(THREE.MathUtils.clamp((active-0.62)/0.38,0,1)*Math.PI));
+      const idleBob=Math.sin(performance.now()/210)*0.012;
+      firstPersonKillerRig.upper.rotation.set(-0.12-0.78*wind+1.16*strike-0.22*follow+idleBob,0.04+0.08*strike,-0.06-0.30*wind+0.28*strike);
+      firstPersonKillerRig.wrist.rotation.set(-0.12-0.34*wind+0.48*strike-0.24*follow+idleBob,0.03*strike,0.04+0.14*wind-0.22*strike+0.08*follow);
+      firstPersonKillerRig.group.rotation.x=-0.12-0.12*wind+0.08*strike;
+      firstPersonKillerRig.group.rotation.z=-0.025-0.045*wind+0.055*strike;
     }
   }
   if(flashlightWorldBeam){
