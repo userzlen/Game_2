@@ -2699,7 +2699,8 @@ function sync3D(dt){
     if(ku.spineBone)ku.spineBone.rotation.x=0.12+Math.sin(phase)*0.035;
     if(ku.chestBone)ku.chestBone.rotation.x=-0.18;
   }else if(killer.attackAnimTimer>0){
-    const p=THREE.MathUtils.clamp(1-killer.attackAnimTimer/0.5,0,1);
+    const attackDuration=killer.attackAnimType==='swing'?0.34:0.5;
+    const p=THREE.MathUtils.clamp(1-killer.attackAnimTimer/attackDuration,0,1);
     // Three-part attack: wind-up, fast strike, then a short weighted follow-through.
     const wind=Math.max(0,1-p/0.28);
     const strike=Math.sin(THREE.MathUtils.clamp((p-0.18)/0.48,0,1)*Math.PI/2);
