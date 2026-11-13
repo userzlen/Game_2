@@ -290,7 +290,7 @@ const survivor = {
 const killer = {
   x:2250,y:1450,radius:CFG.KILLER_RADIUS,state:'idle',facing:Math.PI,pitch:0,walkPhase:0,
   stunTimer:0,breakTimer:0,breakTarget:null,attackCooldown:0,blindTimer:0,slowTimer:0,
-  attackHeldPrev:false,attackChargeTimer:0,attackLungeTimer:0,attackLungeDirX:1,attackLungeDirY:0,attackAnimTimer:0,attackAnimType:'',animEvent:'idle',animTimer:0,
+  attackHeldPrev:false,attackChargeTimer:0,attackLungeTimer:0,attackLungeDirX:1,attackLungeDirY:0,attackAnimTimer:0,attackAnimType:'',attackRecoveryTimer:0,attackHitTimer:0,attackHitPending:false,animEvent:'idle',animTimer:0,
   vaultTimer:0,vaultDuration:0,vaultFrom:{x:0,y:0},vaultTo:{x:0,y:0},
   path:null,pathTimer:0,stuckTimer:0,palletStuckTimer:0,
   dashCooldown:0,dashWindupTimer:0,dashTimer:0,dashDirX:1,dashDirY:0,
@@ -1746,13 +1746,15 @@ function killerUseAbility(){
   else if (killer.hasTrap) tryKillerTrap();
 }
 
-function tryHitSurvivor(){
+function tryHitSurvivor(ignoreAttackCooldown=false){
   const k = killer;
-  if (k.attackCooldown > 0) return false;
+  if (!ignoreAttackCooldown && k.attackCooldown > 0) return false;
   const distS = Math.hypot(survivor.x-k.x, survivor.y-k.y);
   if (distS >= CFG.ATTACK_RANGE || survivor.state === 'vaulting' || survivor.state === 'healing') return false;
   if (survivor.invulnerableTimer > 0 || survivor.hitCooldown > 0) return false;
-  k.attackCooldown = CFG.KILLER_ATTACK_COOLDOWN;
+  k.attackRecoveryTimer=Math.max(k.attackRecoveryTimer,1.05);
+  k.attackHitPending=false;k.attackHitTimer=0;
+  k.attackCooldown = Math.max(k.attackCooldown,CFG.KILLER_ATTACK_COOLDOWN);
   killer.bloodlust = 0; killer.lastHitTime = game.time;survivor.animEvent='hit';survivor.animTimer=0.72;
   if (selectedSurvivor === 'tank' && survivor.health === 'injured' && !survivor.hitOnce) {
     survivor.hitOnce = true; survivor.invulnerableTimer = 3; survivor.speedBoostTimer = 2;
@@ -1940,7 +1942,9 @@ function updateKillerPlayer(dt, input){
   if (k.invisibleCooldown>0) k.invisibleCooldown-=dt;
   if (k.abilityDisabledTimer>0) k.abilityDisabledTimer-=dt;
   if (k.invisibleTimer>0) k.invisibleTimer-=dt;
-  if (k.attackCooldown>0) k.attackCooldown-=dt;
+  if (k.attackCooldown>0) k.attackCooldown=Math.max(0,k.attackCooldown-dt);
+  if (k.attackRecoveryTimer>0) k.attackRecoveryTimer=Math.max(0,k.attackRecoveryTimer-dt);
+  if (k.attackHitPending){k.attackHitTimer-=dt;if(k.attackHitTimer<=0){k.attackHitPending=false;const landed=tryHitSurvivor(true);if(!landed)k.attackRecoveryTimer=Math.max(k.attackRecoveryTimer,0.48);}}
   if (k.cautiousTimer>0) k.cautiousTimer-=dt;
 
   if (k.state === 'stunned' || k.state === 'blinded') {
@@ -2016,7 +2020,7 @@ function updateKillerPlayer(dt, input){
     collideKiller(k);
     k.x=Math.max(k.radius+20,Math.min(2380-k.radius,k.x));k.y=Math.max(k.radius+20,Math.min(1580-k.radius,k.y));
     k.attackLungeTimer=Math.max(0,k.attackLungeTimer-dt);
-    if(k.attackLungeTimer<=0){tryHitSurvivor();k.attackChargeTimer=0;}
+    if(k.attackLungeTimer<=0){tryHitSurvivor(true);k.attackRecoveryTimer=Math.max(k.attackRecoveryTimer,0.55);k.attackChargeTimer=0;}
     return;
   }
   const fX = Math.cos(k.facing), fY = Math.sin(k.facing);
@@ -2027,6 +2031,7 @@ function updateKillerPlayer(dt, input){
   if (input.a) { mx -= rX; my -= rY; }
   if (input.d) { mx += rX; my += rY; }
   const len = Math.hypot(mx, my);
+  if (k.attackRecoveryTimer>0) { mx=0; my=0; }
   if (len > 0) {
     mx /= len; my /= len;
     k.walkPhase += dt * 12;
@@ -2059,16 +2064,19 @@ function updateKillerPlayer(dt, input){
   }
 
   const attackNow=!!input.attack;
-  if(attackNow&&!k.attackHeldPrev&&k.attackCooldown<=0)k.attackChargeTimer=0;
-  if(attackNow&&k.attackCooldown<=0){
+  if(attackNow&&!k.attackHeldPrev&&k.attackCooldown<=0&&k.attackRecoveryTimer<=0)k.attackChargeTimer=0;
+  if(attackNow&&k.attackCooldown<=0&&k.attackRecoveryTimer<=0){
     k.attackChargeTimer+=dt;
     if(k.attackChargeTimer>=CFG.ATTACK_CHARGE_TIME&&k.attackLungeTimer<=0){
       k.attackLungeTimer=CFG.ATTACK_LUNGE_TIME;k.attackLungeDirX=Math.cos(k.facing);k.attackLungeDirY=Math.sin(k.facing);
-      k.attackAnimTimer=0.5;k.attackAnimType='lunge';k.animEvent='attack';k.animTimer=0.5;k.attackCooldown=CFG.KILLER_ATTACK_COOLDOWN;
+      k.attackAnimTimer=0.5;k.attackAnimType='lunge';k.animEvent='attack';k.animTimer=0.5;
+      k.attackCooldown=CFG.KILLER_ATTACK_COOLDOWN;k.attackRecoveryTimer=0.28;k.attackHitPending=false;
     }
   }
-  if(!attackNow&&k.attackHeldPrev&&k.attackCooldown<=0&&k.attackLungeTimer<=0){
-    k.attackAnimTimer=0.34;k.attackAnimType='swing';k.animEvent='attack';k.animTimer=0.34;tryHitSurvivor();k.attackCooldown=CFG.KILLER_ATTACK_COOLDOWN;
+  if(!attackNow&&k.attackHeldPrev&&k.attackCooldown<=0&&k.attackRecoveryTimer<=0&&k.attackLungeTimer<=0){
+    k.attackAnimTimer=0.52;k.attackAnimType='swing';k.animEvent='attack';k.animTimer=0.52;
+    k.attackCooldown=CFG.KILLER_ATTACK_COOLDOWN;k.attackRecoveryTimer=0.22;
+    k.attackHitPending=true;k.attackHitTimer=0.22;
   }
   k.attackHeldPrev=attackNow;
   if(!attackNow&&k.attackLungeTimer<=0)k.attackChargeTimer=0;
@@ -2370,7 +2378,7 @@ function dropPallet(p){
 }
 function stunKiller(){
   let stunDur=CFG.STUN_TIME; if(killer.hasRelentless) stunDur*=0.5;
-  killer.state='stunned'; killer.stunTimer=stunDur; killer.path=null;killer.animEvent='stun';killer.animTimer=stunDur;killer.attackLungeTimer=0;killer.attackChargeTimer=0;killer.attackAnimTimer=0;killer.attackHeldPrev=false;
+  killer.state='stunned'; killer.stunTimer=stunDur; killer.path=null;killer.animEvent='stun';killer.animTimer=stunDur;killer.attackLungeTimer=0;killer.attackChargeTimer=0;killer.attackAnimTimer=0;killer.attackHitPending=false;killer.attackHitTimer=0;killer.attackRecoveryTimer=0;killer.attackHeldPrev=false;
   if (killer.hasRage) killer.rageTimer=4;
   screenShake=14; game.hint='Оглушён!'; game.hintTime=2;
 }
@@ -3161,7 +3169,7 @@ function resetGame(){
   survivor.repairing=null; survivor.repairTimer=0; survivor.isInChase=false; survivor.vx=0; survivor.vy=0;
 
   killer.x=2250; killer.y=1450; killer.state='idle';
-  killer.stunTimer=0; killer.breakTimer=0; killer.breakTarget=null; killer.attackCooldown=0;killer.blindTimer=0;killer.slowTimer=0;killer.attackHeldPrev=false;killer.attackChargeTimer=0;killer.attackLungeTimer=0;killer.attackAnimTimer=0;killer.attackAnimType='';killer.animEvent='idle';killer.animTimer=0;
+  killer.stunTimer=0; killer.breakTimer=0; killer.breakTarget=null; killer.attackCooldown=0;killer.attackRecoveryTimer=0;killer.attackHitTimer=0;killer.attackHitPending=false;killer.blindTimer=0;killer.slowTimer=0;killer.attackHeldPrev=false;killer.attackChargeTimer=0;killer.attackLungeTimer=0;killer.attackAnimTimer=0;killer.attackAnimType='';killer.animEvent='idle';killer.animTimer=0;
   killer.vaultTimer=0; killer.facing=Math.PI; killer.pitch=0; killer.walkPhase=0;
   killer.path=null; killer.pathTimer=0; killer.stuckTimer=0; killer.palletStuckTimer=0;
   killer.dashCooldown=0; killer.dashWindupTimer=0; killer.dashTimer=0;
