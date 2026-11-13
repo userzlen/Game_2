@@ -1015,7 +1015,7 @@ function buildForestSetDressing(){
 }
 
 function sanitizeDecorLayout(){
-  const clearanceFor = (r,type) => type==='tree' ? r*2.55+32 : r+20;
+  const clearanceFor = (r,type) => type==='tree' ? r*3.5+90 : r+24;
   const blocked = (x,y,r,index,type) => {
     const clearance=clearanceFor(r,type);
     if (x < clearance+55 || x > 2400-clearance-55 || y < clearance+55 || y > 1600-clearance-55) return true;
@@ -2133,7 +2133,7 @@ function updateKillerPlayer(dt, input){
     k.x+=k.attackLungeDirX*step;k.y+=k.attackLungeDirY*step;
     collideKiller(k);
     // Check the hit window during the lunge, not only at its final position.
-    if(!tryHitSurvivor(true)){}
+    tryHitSurvivor(true);
     k.x=Math.max(k.radius+20,Math.min(2380-k.radius,k.x));k.y=Math.max(k.radius+20,Math.min(1580-k.radius,k.y));
     k.attackLungeTimer=Math.max(0,k.attackLungeTimer-dt);
     if(k.attackLungeTimer<=0){if(!k.attackHitPending)tryHitSurvivor(true);k.attackRecoveryTimer=Math.max(k.attackRecoveryTimer,0.55);k.attackChargeTimer=0;}
@@ -2737,14 +2737,15 @@ function sync3D(dt){
     const swing = Math.sin(survivor.walkPhase) * 0.6;
     const u = survivorMesh.userData;
     const repairing=!!(survivor.repairing&&survivor.repairing.type==='gen');
+    const flashlighting=!!survivor.flashlightActive;
     const repairClock=performance.now()/1000;
     const repairCycle=repairClock*8.4;
     const beat=Math.sin(repairCycle);
     const workPulse=Math.max(0,Math.sin(repairCycle*2.0));
-    if(u.lArm)u.lArm.rotation.x=repairing?-1.02+beat*0.10:swing;
-    if(u.rArm)u.rArm.rotation.x=repairing?-0.92+Math.sin(repairCycle+0.8)*0.24:-swing;
-    if(u.lArm)u.lArm.rotation.z=repairing?-0.18+beat*0.035:0;
-    if(u.rArm)u.rArm.rotation.z=repairing?0.16+beat*0.045:0;
+    if(u.lArm)u.lArm.rotation.x=repairing?-1.02+beat*0.10:(flashlighting?-0.72+Math.sin(repairClock*8)*0.035:swing);
+    if(u.rArm)u.rArm.rotation.x=repairing?-0.92+Math.sin(repairCycle+0.8)*0.24:(flashlighting?-1.12+Math.sin(repairClock*8+0.5)*0.05:-swing);
+    if(u.lArm)u.lArm.rotation.z=repairing?-0.18+beat*0.035:(flashlighting?-0.12:0);
+    if(u.rArm)u.rArm.rotation.z=repairing?0.16+beat*0.045:(flashlighting?0.20:0);
     if(u.lElbow)u.lElbow.rotation.x=repairing?-0.92+workPulse*0.28:0.08;
     if(u.rElbow)u.rElbow.rotation.x=repairing?-1.08-workPulse*0.34:0.08;
     if(u.lElbow)u.lElbow.rotation.z=repairing?-0.08:0;
