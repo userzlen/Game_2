@@ -1100,7 +1100,7 @@ function buildWorld(){
       post.castShadow=true;post.receiveShadow=true;scene.add(post);
     }
   }
-  const lanternSpots=[[300,340],[760,340],[1640,340],[2100,340],[300,850],[760,850],[1640,850],[2100,850],[300,1300],[760,1450],[1640,1450],[2100,1300]];
+  const lanternSpots=[[350,350],[800,350],[1600,350],[2050,350],[350,850],[2050,850],[350,1300],[2050,1300]];
   for(const [x,y] of lanternSpots){const post=new THREE.Group();const iron=new THREE.MeshStandardMaterial({color:0x252b35,metalness:0.72,roughness:0.55});const wood=new THREE.MeshStandardMaterial({color:0x493a2c,roughness:0.92});const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.085,2.8,8),iron);stem.position.y=1.4;stem.castShadow=true;post.add(stem);const arm=new THREE.Mesh(new THREE.BoxGeometry(0.52,0.07,0.07),iron);arm.position.set(0.22,2.68,0);post.add(arm);const cap=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.17,0.13,8),iron);cap.position.set(0.43,2.59,0);post.add(cap);const glass=new THREE.Mesh(new THREE.SphereGeometry(0.13,12,10),new THREE.MeshStandardMaterial({color:0xffd28a,emissive:0xffa64d,emissiveIntensity:1.5,roughness:0.28}));glass.position.set(0.43,2.40,0);post.add(glass);const glow=new THREE.PointLight(0xffb86b,0.9,8.5,1.8);glow.position.set(0.43,2.38,0);post.add(glow);const base=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.25,0.18,8),wood);base.position.y=0.09;post.add(base);post.position.set(PX(x),0,PX(y));scene.add(post);}
   for (const win of windows){
     const g = new THREE.Group();
@@ -1898,7 +1898,7 @@ function updateKillerAI(dt){
   const distToS = Math.hypot(survivor.x - k.x, survivor.y - k.y);
   if(survivor.state==='downed'&&!k.carryingSurvivor&&distToS<78){k.carryingSurvivor=true;survivor.state='carried';survivor.animEvent='carried';survivor.animTimer=0.5;game.hint='Убийца поднял выжившего';game.hintTime=2;return;}
   const timeSinceSeen = k.lastSeen ? game.time - k.lastSeenTime : 999;
-  if (losClear && survivor.state !== 'vaulting') {
+  if (losClear && survivor.state !== 'vaulting' && survivor.state!=='hooked' && survivor.state!=='carried') {
     k.lastSeen = {x: survivor.x, y: survivor.y}; k.lastSeenTime = game.time;
   }
   k.instinctTimer -= dt;
@@ -1968,7 +1968,7 @@ function updateKillerAI(dt){
     if (killer.hasBlink&&k.blinkCooldown<=0&&distToS>250&&distToS<400&&losClear&&!survivor.invisibleTimer) tryKillerBlink();
     if (killer.hasInvisible&&k.invisibleCooldown<=0&&!losClear&&distToS<500&&k.invisibleTimer<=0) tryKillerInvisible();
   }
-  if (!k.carryingSurvivor && distToS < 350 && losClear && k.state==='idle' && survivor.state!=='vaulting' && survivor.state!=='downed') {
+  if (!k.carryingSurvivor && distToS < 350 && losClear && k.state==='idle' && survivor.state!=='vaulting' && survivor.state!=='downed' && survivor.state!=='hooked' && survivor.state!=='carried') {
     let tx=survivor.x,ty=survivor.y;
     if (distToS>100){const look=Math.min(CFG.INTERCEPT_MAX,distToS/computeKillerSpeed())*CFG.INTERCEPT_LOOKAHEAD;tx=survivor.x+survivor.vx*look;ty=survivor.y+survivor.vy*look;tx=Math.max(30,Math.min(2370,tx));ty=Math.max(30,Math.min(1570,ty));}
     const ddx=tx-k.x,ddy=ty-k.y,dd=Math.hypot(ddx,ddy);
@@ -1983,7 +1983,7 @@ function updateKillerAI(dt){
   let tx,ty;
   const hearing=(Math.hypot(survivor.vx,survivor.vy)>150) && (survivor.invisibleTimer<=0);
   const hearingRange=hearing?CFG.HEARING_RANGE_RUNNING:CFG.HEARING_RANGE_CROUCH;
-  if (losClear && survivor.state!=='vaulting'){tx=survivor.x;ty=survivor.y;}
+  if (losClear && survivor.state!=='vaulting' && survivor.state!=='hooked' && survivor.state!=='carried'){tx=survivor.x;ty=survivor.y;}
   else {
     const newest=bloodTrail.length>0?bloodTrail[bloodTrail.length-1]:null;
     const age=newest?game.time-newest.time:999;
@@ -2261,6 +2261,7 @@ function collideSurvivor(s){
 
 function updateSurvivorAI(dt){
   const s = survivor;s.isMoving=false;
+  if(s.state==='downed'||s.state==='hooked'||s.state==='carried')return;
   if (s.vaultCooldown>0) s.vaultCooldown-=dt;
   if (s.abilityCooldown>0) s.abilityCooldown-=dt;
   if (s.speedBoostTimer>0) s.speedBoostTimer-=dt;
@@ -2395,7 +2396,7 @@ function updateHatchets(dt){
     let hit=false;
     if (Math.hypot(h.x-survivor.x,h.y-survivor.y)<survivor.radius+10&&survivor.invulnerableTimer<=0){
       if (survivor.health==='healthy'){survivor.health='injured';survivor.hitCooldown=CFG.HIT_COOLDOWN;survivor.speedBoostTimer=1.5;game.hint='РАНЕН!';game.hintTime=2;}
-      else {game.screen='lose';if (MP.role==='host'&&MP.connReady)MP.conn.send({type:'end',screen:'lose'});showEndScreen('ПОЙМАН','Топор убийцы настиг','#ff5050');}
+      else {survivor.health='downed';survivor.state='downed';survivor.downedTimer=90;survivor.animEvent='downed';survivor.animTimer=1;survivor.hitCooldown=1.2;game.hint='ПОВЕРЖЕН';game.hintTime=2.5;}
       hit=true;
     }
     for(const w of walls) if(h.x>w.x&&h.x<w.x+w.w&&h.y>w.y&&h.y<w.y+w.h) hit=true;
@@ -2413,7 +2414,7 @@ function updateBloodTrail(dt){
   for(let i=bloodTrail.length-1;i>=0;i--) if(game.time-bloodTrail[i].time>CFG.BLOOD_TRAIL_LIFETIME) bloodTrail.splice(i,1);
 }
 function checkWin(){
-  const s=survivor;
+  const s=survivor;if(s.state==='downed'||s.state==='hooked'||s.state==='carried')return;
   for(const e of exitDoors){
     if (e.opened&&s.x>e.x&&s.x<e.x+e.w&&s.y>e.y&&s.y<e.y+e.h){
       game.screen='win';
@@ -2459,7 +2460,7 @@ function tryInteractHold(input, dt=1/60){
 }
 function tryInteractSingle(){
   const s=survivor;
-  if (s.state==='vaulting'||s.state==='healing'||s.vaultCooldown>0) return;
+  if (s.state==='vaulting'||s.state==='healing'||s.state==='downed'||s.state==='hooked'||s.state==='carried'||s.vaultCooldown>0) return;
   let best=null,bestDist=Infinity,bestType=null;
   for(const p of pallets){const d=Math.hypot(p.x-s.x,p.y-s.y);if(d<CFG.PALLET_INTERACT&&(p.state==='upright'||p.state==='dropped')&&d<bestDist){bestDist=d;best=p;bestType='pallet';}}
   for(const win of windows){if(win.blockedTimer>0)continue;const d=Math.hypot(win.cx-s.x,win.cy-s.y);if(d<CFG.WINDOW_INTERACT&&d<bestDist){bestDist=d;best=win;bestType='window';}}
