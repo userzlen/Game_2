@@ -625,19 +625,17 @@ function setupConnection(conn){
     if (MP.onConnected) { const done = MP.onConnected; MP.onConnected = null; done(); }
     game.hint = 'Соединение установлено!';
     game.hintTime = 3;
-    if (MP.role === 'host') {
-      if (game.screen !== 'playing') {
-        const guestRole = MP.myRole === 'survivor' ? 'killer' : 'survivor';
-        conn.send({ type: 'start', guestRole: guestRole });
-        beginPlaying();
-      }
-    }
+    conn.send({type:'hello',name:MP.playerName||'Игрок'});
+    if(MP.role==='host') showMPHosting(MP.roomCode,buildInviteUrl(MP.roomCode));
+    else showMPGuestLobby();
   });
   conn.on('data', (data) => {
+    if(data.type==='hello'){MP.remoteName=String(data.name||'Игрок').slice(0,20);refreshMPLobby();}
     if (MP.role === 'host') {
       if (data.type === 'input') MP.remoteInput = data.input;
     } else {
-      if (data.type === 'state') { MP.remoteState = data.state; applyStateToWorld(data.state); }
+      if (data.type === 'hello') { /* name handled above */ }
+      else if (data.type === 'state') { MP.remoteState = data.state; applyStateToWorld(data.state); }
       else if (data.type === 'start') {
         MP.myRole = data.guestRole;
         beginPlaying();
@@ -3246,16 +3244,28 @@ function showMPHostSelect(){
 }
 function showMPHosting(code, url){
   screenEl.classList.add('show');
-  screenEl.innerHTML = `<h1 style="color:#88ffaa;font-size:32px;">КОМНАТА СОЗДАНА</h1>
-    <div class="room-code">${code}</div>
-    <div style="color:#88a0b8;font-size:14px;margin-top:8px;">Отправь другу ссылку:</div>
-    <div class="invite-url" id="inviteUrl">${url}</div>
-    <div style="margin:12px 0;">
-      <button class="btn green" onclick="window.__copyInvite()">СКОПИРОВАТЬ</button>
-      <button class="btn red" onclick="window.__cancelHost()">ОТМЕНА</button>
+  screenEl.innerHTML = `<div style="width:min(850px,94vw);margin:auto;padding:30px;background:linear-gradient(145deg,#1b1d1e,#080a0c);border:1px solid #60483e;text-align:center;box-shadow:0 20px 80px #000b">
+    <div style="color:#bd907c;letter-spacing:5px;font-size:11px">DEAD BY DAYLIGHT · ЛОББИ</div><h1 style="color:#eee;font-size:30px">КОМНАТА ОЖИДАНИЯ</h1>
+    <div style="color:#aaa;margin-bottom:25px">Ты — хозяин комнаты и стоишь в центре лобби</div>
+    <div style="display:flex;justify-content:center;align-items:end;gap:38px;margin:28px auto">
+      <div style="width:190px;padding:18px;background:#29201e;border:1px solid #a35e4c"><div style="font-size:68px">🧍</div><b>${mpEscape(MP.playerName||'ХОСТ')}</b><div style="font-size:10px;color:#c18b79;letter-spacing:2px;margin-top:6px">ХОЗЯИН · ЦЕНТР</div></div>
+      <div style="width:190px;padding:18px;background:#111416;border:1px dashed #66544b"><div style="font-size:68px">?</div><b id="mpGuestNick">ОЖИДАНИЕ ИГРОКА</b><div style="font-size:10px;color:#aaa;letter-spacing:2px;margin-top:6px">СЛОТ ИГРОКА</div></div>
     </div>
-    <div id="status">Ожидание подключения…</div>`;
+    <div class="room-code">${code}</div><div style="color:#aaa;font-size:12px">ССЫЛКА-ПРИГЛАШЕНИЕ</div><div class="invite-url" id="inviteUrl">${url}</div>
+    <div style="margin:14px"><button class="btn green" onclick="window.__copyInvite()">СКОПИРОВАТЬ ССЫЛКУ</button><button class="btn red" onclick="window.__cancelHost()">ВЫЙТИ</button></div><div id="status">Ожидание подключения…</div>
+  </div>`;
 }
+function mpEscape(v){return String(v||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function showMPGuestLobby(){
+ screenEl.classList.add('show');
+ screenEl.innerHTML='<div style="width:min(700px,92vw);margin:10vh auto;padding:30px;background:#111519;border:1px solid #60483e;text-align:center"><div style="color:#bd907c;letter-spacing:5px">DEAD BY DAYLIGHT · ЛОББИ</div><h1>ТЫ В КОМНАТЕ</h1><div style="display:flex;justify-content:center;gap:40px;margin:30px"><div><div style="font-size:64px">🧍</div><b>'+mpEscape(MP.playerName)+'</b><div style="color:#bd907c">ТЫ</div></div><div><div style="font-size:64px">🧍</div><b id="mpHostNick">ХОЗЯИН КОМНАТЫ</b><div style="color:#bd907c">ХОСТ</div></div></div><div id="status">Ожидание начала матча хозяином…</div><button class="btn" onclick="window.__cancelGuest()">ВЫЙТИ</button></div>';
+}
+function refreshMPLobby(){
+ const guest=document.getElementById('mpGuestNick');if(guest)guest.textContent=MP.remoteName||'ОЖИДАНИЕ ИГРОКА';
+ const host=document.getElementById('mpHostNick');if(host)host.textContent=MP.remoteName||'ХОЗЯИН КОМНАТЫ';
+ const status=document.getElementById('status');if(status)status.textContent=MP.remoteName?'Игрок подключён. Ожидание начала матча…':'Ожидание подключения…';
+}
+window.__cancelGuest=async()=>{await cleanupMultiplayer(false);showMPMenu();};
 function showMPJoinScreen(prefillCode){
   screenEl.classList.add('show');
   screenEl.innerHTML = `<h1 style="color:#8ab4ff;font-size:28px;">ВОЙТИ В КОМНАТУ</h1>
