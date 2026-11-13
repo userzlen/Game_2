@@ -148,7 +148,7 @@ const CFG = {
   DASH_WINDUP:0.3, DASH_DURATION:0.4, DASH_COOLDOWN:8,
   WINDOW_BLOCK_AFTER:3, WINDOW_BLOCK_TIME:16, WINDOW_VAULT_RESET:12,
   CHASE_RANGE:400, FLASHLIGHT_RANGE:250, FLASHLIGHT_ANGLE:0.6,
-  HEAL_TIME:6, HIT_COOLDOWN:1.2, INJURED_SPEED_MULT:0.92,
+  HEAL_TIME:10, HIT_COOLDOWN:1.2, INJURED_SPEED_MULT:0.92,
   GENERATOR_COUNT:3, GENERATOR_REPAIR_TIME:15, GENERATOR_INTERACT:75,
   EXIT_OPEN_TIME:3, EXIT_INTERACT:80,
   BLOOD_TRAIL_INTERVAL:0.42, BLOOD_TRAIL_LIFETIME:6, BLOOD_TRAIL_VIEW_DISTANCE:260,
@@ -289,7 +289,7 @@ const survivor = {
   vaultTimer:0,vaultDuration:0,vaultCooldown:0,vaultFrom:{x:0,y:0},vaultTo:{x:0,y:0},
   abilityCooldown:0,speedBoostTimer:0,vaultBoostTimer:0,invisibleTimer:0,invulnerableTimer:0,
   itemCooldown:0,itemUsed:false,hitOnce:false,slowTimer:0,flashlightCharge:0,flashlightActive:false,
-  health:'healthy',hitCooldown:0,healTimer:0,bloodTimer:0,animEvent:'idle',animTimer:0,isMoving:false,
+  health:'healthy',hitCooldown:0,healTimer:0,medkitEquipped:false,medkitSpent:false,bloodTimer:0,animEvent:'idle',animTimer:0,isMoving:false,
   downedTimer:0,hookStage:0,hookedTimer:0,hookIndex:-1,
   lastKnownPos:{x:0,y:0},isInChase:false,vx:0,vy:0,
   noTrailTimer:0,litheTimer:0,repairing:null,repairTimer:0,trailTimer:0,
@@ -1464,13 +1464,29 @@ function makeSurvivorMesh(){
     return{hip,knee};
   }
   const l=arm(-1),r=arm(1),ll=leg(-1),rr=leg(1);
+  // Compact field medkit holster on the survivor's left hip.
+  const medkitProp=new THREE.Group();
+  const kitBody=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.19,0.12),new THREE.MeshStandardMaterial({color:0x26313a,roughness:0.78}));
+  kitBody.castShadow=true;medkitProp.add(kitBody);
+  const kitFront=new THREE.Mesh(new THREE.BoxGeometry(0.18,0.15,0.018),new THREE.MeshStandardMaterial({color:0xc7c9c5,roughness:0.72}));
+  kitFront.position.set(0,0,0.068);medkitProp.add(kitFront);
+  const crossV=new THREE.Mesh(new THREE.BoxGeometry(0.035,0.105,0.012),new THREE.MeshStandardMaterial({color:0xb83b3b,roughness:0.65}));
+  crossV.position.set(0,0,0.082);medkitProp.add(crossV);
+  const crossH=new THREE.Mesh(new THREE.BoxGeometry(0.105,0.035,0.012),crossV.material);
+  crossH.position.set(0,0,0.083);medkitProp.add(crossH);
+  const kitLid=new THREE.Group();kitLid.position.set(0,0.095,-0.045);medkitProp.add(kitLid);
+  const lidMesh=new THREE.Mesh(new THREE.BoxGeometry(0.22,0.035,0.13),new THREE.MeshStandardMaterial({color:0x46545d,roughness:0.8}));
+  lidMesh.position.y=0.018;kitLid.add(lidMesh);
+  const kitStrap=new THREE.Mesh(new THREE.BoxGeometry(0.045,0.205,0.135),new THREE.MeshStandardMaterial({color:0x9a8b70,roughness:0.9}));
+  kitStrap.position.x=0.085;medkitProp.add(kitStrap);
+  medkitProp.position.set(-0.31,0.48,0.22);medkitProp.rotation.set(0.08,-0.12,-0.12);g.add(medkitProp);
   const survivorSkeleton=new THREE.Skeleton([pelvisBone,spineBone,chestBone,l.upper,l.elbow,l.hand,r.upper,r.elbow,r.hand,ll.hip,ll.knee,rr.hip,rr.knee]);
   g.updateMatrixWorld(true);body.bind(survivorSkeleton);
   attachSkinnedLimb(g,survivorSkeleton,fabric,{x:-0.36,topY:1.37,bottomY:0.61,topRadius:0.12,bottomRadius:0.075,upperBone:3,lowerBone:4,splitY:0.99});
   attachSkinnedLimb(g,survivorSkeleton,fabric,{x:0.36,topY:1.37,bottomY:0.61,topRadius:0.12,bottomRadius:0.075,upperBone:6,lowerBone:7,splitY:0.99});
   attachSkinnedLimb(g,survivorSkeleton,denim,{x:-0.16,topY:0.60,bottomY:-0.13,topRadius:0.14,bottomRadius:0.09,upperBone:9,lowerBone:10,splitY:0.22});
   attachSkinnedLimb(g,survivorSkeleton,denim,{x:0.16,topY:0.60,bottomY:-0.13,topRadius:0.14,bottomRadius:0.09,upperBone:11,lowerBone:12,splitY:0.22});
-  g.userData={lArm:l.upper,rArm:r.upper,lElbow:l.elbow,rElbow:r.elbow,lHand:l.hand,rHand:r.hand,lTool:l.tool,rTool:r.tool,flashlightProp:r.flashlightProp,lLeg:ll.hip,rLeg:rr.hip,lKnee:ll.knee,rKnee:rr.knee,body,bodyPivot,head,headPivot,skeleton:survivorSkeleton,spineBone,chestBone};
+  g.userData={lArm:l.upper,rArm:r.upper,lElbow:l.elbow,rElbow:r.elbow,lHand:l.hand,rHand:r.hand,lTool:l.tool,rTool:r.tool,flashlightProp:r.flashlightProp,lLeg:ll.hip,rLeg:rr.hip,lKnee:ll.knee,rKnee:rr.knee,body,bodyPivot,head,headPivot,medkitProp,kitLid,skeleton:survivorSkeleton,spineBone,chestBone};
   return g;
 }
 
@@ -2250,7 +2266,7 @@ function updateSurvivorInput(dt, input){
   }
   if (s.state==='healing'){
     s.healTimer-=dt;
-    if (s.healTimer<=0){s.health='healthy';s.state='idle';game.hint='Залечен!';game.hintTime=1.5;}
+    if (s.healTimer<=0){s.health='healthy';s.state='idle';s.medkitSpent=true;s.medkitEquipped=false;game.hint='Залечен!';game.hintTime=1.5;}
     return;
   }
   if (s.state==='vaulting'){
@@ -2317,7 +2333,7 @@ function updateSurvivorAI(dt){
   }
   if (s.state==='healing'){
     s.healTimer-=dt;
-    if (s.healTimer<=0){s.health='healthy';s.state='idle';}
+    if (s.healTimer<=0){s.health='healthy';s.state='idle';s.medkitSpent=true;s.medkitEquipped=false;}
     return;
   }
   const kDist = Math.hypot(killer.x - s.x, killer.y - s.y);
@@ -2620,7 +2636,7 @@ function tryUseItem(){
     survivor.flashlightCharge=0;game.hint='Удерживай F и направляй свет на лицо убийцы';game.hintTime=2;
   } else if (selectedItem==='medkit'){
     if (survivor.health==='healthy'){game.hint='Не ранен';game.hintTime=1;return;}
-    survivor.state='healing'; survivor.healTimer=CFG.HEAL_TIME; survivor.itemCooldown=9999;
+    survivor.state='healing'; survivor.healTimer=CFG.HEAL_TIME; survivor.itemCooldown=9999; survivor.medkitEquipped=true; survivor.medkitSpent=false;
     game.hint='Лечение...'; game.hintTime=CFG.HEAL_TIME;
   } else if (selectedItem==='smoke'){
     const tx=survivor.x+Math.cos(survivor.facing)*CFG.SMOKE_THROW;
@@ -2803,22 +2819,24 @@ function sync3D(dt){
     const swing = Math.sin(survivor.walkPhase) * 0.6;
     const u = survivorMesh.userData;
     const repairing=!!(survivor.repairing&&survivor.repairing.type==='gen');
+    const healing=survivor.state==='healing';
+    if(u.medkitProp){u.medkitProp.visible=!!(survivor.medkitEquipped&&!survivor.medkitSpent||healing);const t=healing?THREE.MathUtils.clamp(1-survivor.healTimer/CFG.HEAL_TIME,0,1):0;const lift=t*t*(3-2*t);u.medkitProp.position.set(-0.31+0.23*lift,0.48+0.92*lift,0.22+0.18*lift);u.medkitProp.rotation.set(0.08-0.42*lift,-0.12+0.12*lift,-0.12+0.38*lift);if(u.kitLid)u.kitLid.rotation.x=healing?-0.95*lift:0;}
     const flashlighting=!!survivor.flashlightActive;
     if(u.flashlightProp)u.flashlightProp.visible=flashlighting;
     const repairClock=performance.now()/1000;
     const repairCycle=repairClock*8.4;
     const beat=Math.sin(repairCycle);
     const workPulse=Math.max(0,Math.sin(repairCycle*2.0));
-    if(u.lArm)u.lArm.rotation.x=repairing?-1.02+beat*0.10:(flashlighting?-0.72+Math.sin(repairClock*8)*0.035:swing);
-    if(u.rArm)u.rArm.rotation.x=repairing?-0.92+Math.sin(repairCycle+0.8)*0.24:(flashlighting?-1.12+Math.sin(repairClock*8+0.5)*0.05:-swing);
+    if(u.lArm)u.lArm.rotation.x=healing?-1.55+Math.sin(repairClock*5)*0.07:(repairing?-1.02+beat*0.10:(flashlighting?-0.72+Math.sin(repairClock*8)*0.035:swing));
+    if(u.rArm)u.rArm.rotation.x=healing?-1.72+Math.sin(repairClock*5+0.8)*0.10:(repairing?-0.92+Math.sin(repairCycle+0.8)*0.24:(flashlighting?-1.12+Math.sin(repairClock*8+0.5)*0.05:-swing));
     if(u.lArm)u.lArm.rotation.z=repairing?-0.18+beat*0.035:(flashlighting?-0.12:0);
     if(u.rArm)u.rArm.rotation.z=repairing?0.16+beat*0.045:(flashlighting?0.20:0);
-    if(u.lElbow)u.lElbow.rotation.x=repairing?-0.92+workPulse*0.28:0.08;
-    if(u.rElbow)u.rElbow.rotation.x=repairing?-1.08-workPulse*0.34:0.08;
+    if(u.lElbow)u.lElbow.rotation.x=healing?-1.12+Math.sin(repairClock*5)*0.12:(repairing?-0.92+workPulse*0.28:0.08);
+    if(u.rElbow)u.rElbow.rotation.x=healing?-1.35+Math.sin(repairClock*5+1.2)*0.16:(repairing?-1.08-workPulse*0.34:0.08);
     if(u.lElbow)u.lElbow.rotation.z=repairing?-0.08:0;
     if(u.rElbow)u.rElbow.rotation.z=repairing?0.10:0;
-    if(u.lHand)u.lHand.rotation.x=repairing?0.16+Math.sin(repairCycle*2.0)*0.12:0;
-    if(u.rHand)u.rHand.rotation.x=repairing?-0.24-Math.sin(repairCycle*2.0+0.5)*0.16:0;
+    if(u.lHand)u.lHand.rotation.x=healing?0.35+Math.sin(repairClock*5)*0.12:(repairing?0.16+Math.sin(repairCycle*2.0)*0.12:0);
+    if(u.rHand)u.rHand.rotation.x=healing?-0.45-Math.sin(repairClock*5+0.7)*0.16:(repairing?-0.24-Math.sin(repairCycle*2.0+0.5)*0.16:0);
     if(u.lHand)u.lHand.rotation.z=repairing?Math.sin(repairCycle)*0.08:0;
     if(u.rHand)u.rHand.rotation.z=repairing?-Math.sin(repairCycle)*0.12:0;
     if(u.rTool){u.rTool.rotation.z=repairing?Math.sin(repairCycle*2.0)*0.24:0;u.rTool.rotation.y=repairing?0.12+workPulse*0.16:0;}
@@ -2826,12 +2844,12 @@ function sync3D(dt){
     if(u.rLeg)u.rLeg.rotation.x=repairing?-0.12:swing;
     if(u.lKnee)u.lKnee.rotation.x=repairing?0.28:(moving?Math.max(0,-swing)*0.45:(survivor.health==='injured'?0.12:0));
     if(u.rKnee)u.rKnee.rotation.x=repairing?0.22:(moving?Math.max(0,swing)*0.45:(survivor.health==='injured'?0.1:0));
-    if(u.spineBone)u.spineBone.rotation.x=repairing?-0.10+beat*0.025:(moving?Math.sin(survivor.walkPhase*2)*0.035:0);
+    if(u.spineBone)u.spineBone.rotation.x=healing?-0.22+Math.sin(repairClock*2.5)*0.025:(repairing?-0.10+beat*0.025:(moving?Math.sin(survivor.walkPhase*2)*0.035:0));
     if(u.chestBone)u.chestBone.rotation.z=repairing?Math.sin(repairCycle)*0.025:(moving?Math.sin(survivor.walkPhase)*0.025:0);
     if(repairing&&u.body){u.body.rotation.x=-0.10+Math.sin(repairCycle)*0.015;u.body.rotation.z=Math.sin(repairCycle)*0.015;}
     else if(u.body){u.body.rotation.x*=0.82;u.body.rotation.z*=0.82;}
     if (u.body) u.body.position.y = 1.0 + (moving ? Math.abs(Math.sin(survivor.walkPhase*2))*0.05 : 0);
-    if (u.head) u.head.position.y = 1.65 + (moving ? Math.abs(Math.sin(survivor.walkPhase*2))*0.05 : 0);
+    if (u.head) u.head.position.y = moving ? Math.abs(Math.sin(survivor.walkPhase*2))*0.035 : 0;
     if(survivor.state==='downed'){survivorMesh.position.y=0.16;survivorMesh.rotation.x=-Math.PI/2.05;survivorMesh.rotation.z=Math.sin(performance.now()/420)*0.035;if(u.bodyPivot)u.bodyPivot.rotation.x=0.10;if(u.headPivot)u.headPivot.rotation.x=-0.10;if(u.lArm)u.lArm.rotation.x=-0.35;if(u.rArm)u.rArm.rotation.x=-0.35;if(u.lLeg)u.lLeg.rotation.x=0.12;if(u.rLeg)u.rLeg.rotation.x=-0.12;}else if(survivor.state==='hooked'){const h=hooks[survivor.hookIndex];if(h)survivorMesh.position.set(PX(h.x),0.38,PX(h.y));survivorMesh.rotation.x=0.08;survivorMesh.rotation.z=0.12;if(u.lArm)u.lArm.rotation.x=-1.45;if(u.rArm)u.rArm.rotation.x=-1.55;if(u.lElbow)u.lElbow.rotation.x=-0.55;if(u.rElbow)u.rElbow.rotation.x=-0.60;}else if(survivor.state==='carried'){survivorMesh.position.y=0.72;survivorMesh.rotation.x=0.62;survivorMesh.rotation.z=0.12;if(u.lArm)u.lArm.rotation.x=-1.65;if(u.rArm)u.rArm.rotation.x=-1.45;if(u.lKnee)u.lKnee.rotation.x=0.55;if(u.rKnee)u.rKnee.rotation.x=0.45;}else if(survivor.state==='vaulting'){
       const t=survivor.vaultTimer/survivor.vaultDuration,arc=Math.sin(t*Math.PI);
       survivorMesh.position.y=arc*1.2;survivorMesh.rotation.x=arc*0.48;
