@@ -2820,7 +2820,7 @@ function sync3D(dt){
     const u = survivorMesh.userData;
     const repairing=!!(survivor.repairing&&survivor.repairing.type==='gen');
     const healing=survivor.state==='healing';
-    if(u.medkitProp){u.medkitProp.visible=!!(survivor.medkitEquipped&&!survivor.medkitSpent||healing);const t=healing?THREE.MathUtils.clamp(1-survivor.healTimer/CFG.HEAL_TIME,0,1):0;const lift=t*t*(3-2*t);u.medkitProp.position.set(-0.31+0.23*lift,0.48+0.92*lift,0.22+0.18*lift);u.medkitProp.rotation.set(0.08-0.42*lift,-0.12+0.12*lift,-0.12+0.38*lift);if(u.kitLid)u.kitLid.rotation.x=healing?-0.95*lift:0;}
+    if(u.medkitProp){u.medkitProp.visible=!!((survivor.medkitEquipped&&!survivor.medkitSpent)||healing);const t=healing?THREE.MathUtils.clamp(1-survivor.healTimer/CFG.HEAL_TIME,0,1):0;const lift=t*t*(3-2*t);u.medkitProp.position.set(-0.31+0.23*lift,0.48+0.92*lift,0.22+0.18*lift);u.medkitProp.rotation.set(0.08-0.42*lift,-0.12+0.12*lift,-0.12+0.38*lift);if(u.kitLid)u.kitLid.rotation.x=healing?-0.95*lift:0;}
     const flashlighting=!!survivor.flashlightActive;
     if(u.flashlightProp)u.flashlightProp.visible=flashlighting;
     const repairClock=performance.now()/1000;
@@ -3302,7 +3302,7 @@ window.__roleSurvivor = () => { playerRole = 'survivor'; MP.active = false; MP.m
 window.__roleKiller = () => { playerRole = 'killer'; MP.active = false; MP.myRole = 'killer'; showKillerReveal(); };
 
 window.__selSurv = (k) => { selectedSurvivor = k; showSurvivorSelect(); };
-window.__selItem = (k) => { selectedItem = k; showItemSelect(); };
+window.__selItem = (k) => { selectedItem = k; survivor.medkitEquipped = k === 'medkit'; survivor.medkitSpent = false; showItemSelect(); };
 window.__toSurv = () => showSurvivorSelect();
 window.__toItem = () => showItemSelect();
 window.__toReveal = () => showKillerReveal();
