@@ -1015,7 +1015,7 @@ function buildForestSetDressing(){
 }
 
 function sanitizeDecorLayout(){
-  const blocked = (x,y,r,index) => {
+  const blocked = (x,y,r,index,type) => {
     if (x < r+55 || x > 2400-r-55 || y < r+55 || y > 1600-r-55) return true;
     // Keep scenery away from both player spawn points and the map exits.
     if (Math.hypot(x-150,y-150) < r+95 || Math.hypot(x-2250,y-1450) < r+95) return true;
@@ -1024,7 +1024,7 @@ function sanitizeDecorLayout(){
     for (const p of pallets) if (Math.hypot(x-p.x,y-p.y) < r+72) return true;
     for (const win of windows) if (circleRect(x,y,r+8,win.x-18,win.y-18,win.w+36,win.h+36)) return true;
     for (const e of exitDoors) if (circleRect(x,y,r+8,e.x,e.y,e.w,e.h)) return true;
-    const clearanceRadius=d.type==='tree'?r*2.15+18:r+12;
+    const clearanceRadius=type==='tree'?r*2.15+18:r+12;
     for (const w of walls) if (circleRect(x,y,clearanceRadius,w.x,w.y,w.w,w.h)) return true;
     for (let i=0;i<index;i++){
       const other=decor[i],otherClearance=other.type==='tree'?other.r*2.15+18:other.r+12;
@@ -1033,7 +1033,7 @@ function sanitizeDecorLayout(){
     return false;
   };
   decor.forEach((d,index)=>{
-    if (!blocked(d.x,d.y,d.r,index)) return;
+    if (!blocked(d.x,d.y,d.r,index,d.type)) return;
     const ox=d.x, oy=d.y;
     let placed=false;
     for (let radius=40;radius<=320&&!placed;radius+=40){
@@ -1041,7 +1041,7 @@ function sanitizeDecorLayout(){
         const angle=step*Math.PI/8;
         const x=Math.round((ox+Math.cos(angle)*radius)/10)*10;
         const y=Math.round((oy+Math.sin(angle)*radius)/10)*10;
-        if (!blocked(x,y,d.r,index)){d.x=x;d.y=y;placed=true;break;}
+        if (!blocked(x,y,d.r,index,d.type)){d.x=x;d.y=y;placed=true;break;}
       }
     }
     if (!placed) log('Не удалось автоматически переместить декор: '+d.type+' '+index);
