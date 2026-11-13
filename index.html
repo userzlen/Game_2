@@ -2594,10 +2594,10 @@ function sync3D(dt){
     if(u.lHand)u.lHand.rotation.z=repairing?Math.sin(repairCycle)*0.08:0;
     if(u.rHand)u.rHand.rotation.z=repairing?-Math.sin(repairCycle)*0.12:0;
     if(u.rTool){u.rTool.rotation.z=repairing?Math.sin(repairCycle*2.0)*0.24:0;u.rTool.rotation.y=repairing?0.12+workPulse*0.16:0;}
-    if(u.lLeg)u.lLeg.rotation.x=repairing?0.04:-swing;
-    if(u.rLeg)u.rLeg.rotation.x=repairing?-0.04:swing;
-    if(u.lKnee)u.lKnee.rotation.x=moving?Math.max(0,-swing)*0.45:(survivor.health==='injured'?0.12:0);
-    if(u.rKnee)u.rKnee.rotation.x=moving?Math.max(0,swing)*0.45:(survivor.health==='injured'?0.1:0);
+    if(u.lLeg)u.lLeg.rotation.x=repairing?-0.18:-swing;
+    if(u.rLeg)u.rLeg.rotation.x=repairing?-0.12:swing;
+    if(u.lKnee)u.lKnee.rotation.x=repairing?0.28:(moving?Math.max(0,-swing)*0.45:(survivor.health==='injured'?0.12:0));
+    if(u.rKnee)u.rKnee.rotation.x=repairing?0.22:(moving?Math.max(0,swing)*0.45:(survivor.health==='injured'?0.1:0));
     if(u.spineBone)u.spineBone.rotation.x=repairing?-0.10+beat*0.025:(moving?Math.sin(survivor.walkPhase*2)*0.035:0);
     if(u.chestBone)u.chestBone.rotation.z=repairing?Math.sin(repairCycle)*0.025:(moving?Math.sin(survivor.walkPhase)*0.025:0);
     if(repairing&&u.body){u.body.rotation.x=-0.10+Math.sin(repairCycle)*0.015;u.body.rotation.z=Math.sin(repairCycle)*0.015;}
@@ -2628,10 +2628,15 @@ function sync3D(dt){
       if(u.lKnee)u.lKnee.rotation.x=0.18;if(u.rKnee)u.rKnee.rotation.x=0.18;
     }else{
       survivorMesh.rotation.x=0;survivorMesh.rotation.z*=0.82;
-      if(!moving&&!repairing&&u.bodyPivot){u.bodyPivot.rotation.z=idleBreath;u.bodyPivot.rotation.x=idleBreath*0.35;}
-      if(u.headPivot){u.headPivot.rotation.y=Math.sin(performance.now()/1000*0.42)*0.035;u.headPivot.rotation.z=injuredLean;}
-      if(u.bodyPivot){u.bodyPivot.rotation.x*=0.82;u.bodyPivot.rotation.z*=0.82;}
-      if(u.headPivot)u.headPivot.rotation.z*=0.82;
+      if(u.bodyPivot){
+        if(repairing){u.bodyPivot.rotation.x=-0.11+beat*0.018;u.bodyPivot.rotation.z=Math.sin(repairCycle)*0.012;}
+        else{u.bodyPivot.rotation.x*=0.82;u.bodyPivot.rotation.z*=0.82;if(!moving){u.bodyPivot.rotation.z+=idleBreath;u.bodyPivot.rotation.x+=idleBreath*0.35;}}
+      }
+      if(u.headPivot){
+        u.headPivot.rotation.y=Math.sin(performance.now()/1000*0.42)*0.035;
+        u.headPivot.rotation.z=repairing?-0.08+beat*0.012:injuredLean;
+        u.headPivot.rotation.x=repairing?0.10:0;
+      }
       if(survivor.health==='injured'&&moving){survivorMesh.rotation.z=0.035*Math.sin(survivor.walkPhase*0.5);if(u.headPivot)u.headPivot.rotation.z=0.04;}
     }
   }
