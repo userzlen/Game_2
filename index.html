@@ -2724,26 +2724,32 @@ function sync3D(dt){
     const showWorldBeam=!myIsSurvivor&&survivor.flashlightActive&&game.screen==='playing';
     flashlightWorldBeam.visible=showWorldBeam;
     if(showWorldBeam){
-      const sx=PX(survivor.x),sz=PX(survivor.y),kx=PX(killer.x),kz=PX(killer.y);
-      const dx=kx-sx,dz=kz-sz,dist=Math.hypot(dx,dz);
+      const sx=PX(survivor.x),sz=PX(survivor.y);
+      const fx=Math.cos(survivor.facing),fz=Math.sin(survivor.facing);
+      const beamLength=PX(CFG.FLASHLIGHT_RANGE);
       flashlightWorldBeam.position.set(sx,1.35,sz);
-      flashlightWorldBeam.lookAt(kx,1.15,kz);
-      flashlightWorldBeam.scale.set(1,1,Math.max(0.35,Math.min(1.35,dist/6)));
-      const pulse=0.75+0.25*Math.sin(performance.now()/55);
-      flashlightWorldBeam.children[0].material.opacity=0.07*pulse;
-      flashlightWorldBeam.children[1].material.opacity=0.65+0.25*pulse;
-      flashlightWorldBeam.children[1].position.z=-5.7;
+      flashlightWorldBeam.lookAt(sx+fx,1.35,sz+fz);
+      flashlightWorldBeam.scale.set(1,1,beamLength/6);
+      const pulse=0.78+0.22*Math.sin(performance.now()/65);
+      flashlightWorldBeam.children[0].material.opacity=0.095*pulse;
+      flashlightWorldBeam.children[1].material.opacity=0.58+0.30*pulse;
+      flashlightWorldBeam.children[1].position.set(0,0,-5.7);
     }
   }
   if(firstPersonFlashlightRig){
-    const showLight=myIsSurvivor&&selectedItem==='flashlight'&&survivor.flashlightActive&&game.screen==='playing';
-    firstPersonFlashlightRig.group.visible=showLight;
-    if(showLight){
-      const pulse=0.5+0.5*Math.sin(performance.now()/75);
-      firstPersonFlashlightRig.arm.rotation.x=-0.10+0.035*pulse;
-      firstPersonFlashlightRig.arm.rotation.z=-0.04+0.025*Math.sin(performance.now()/110);
-      firstPersonFlashlightRig.flashlight.rotation.x=-0.10+0.025*Math.sin(performance.now()/90);
-      firstPersonFlashlightRig.lens.material.emissiveIntensity=0.35+0.25*pulse;
+    const hasFlashlight=myIsSurvivor&&selectedItem==='flashlight'&&game.screen==='playing';
+    const active=hasFlashlight&&survivor.flashlightActive;
+    firstPersonFlashlightRig.group.visible=hasFlashlight;
+    if(hasFlashlight){
+      const pulse=0.5+0.5*Math.sin(performance.now()/95);
+      const aimBlend=active?1:0;
+      firstPersonFlashlightRig.arm.rotation.x=-0.34+0.25*aimBlend+0.025*pulse;
+      firstPersonFlashlightRig.arm.rotation.y=0.035*Math.sin(performance.now()/420);
+      firstPersonFlashlightRig.arm.rotation.z=-0.12+0.08*aimBlend+0.018*Math.sin(performance.now()/130);
+      firstPersonFlashlightRig.flashlight.rotation.x=-0.08+0.10*aimBlend+0.018*Math.sin(performance.now()/105);
+      firstPersonFlashlightRig.flashlight.rotation.y=0.025*Math.sin(performance.now()/180);
+      firstPersonFlashlightRig.lens.material.emissiveIntensity=active?0.65+0.3*pulse:0.12;
+      firstPersonFlashlightRig.lens.material.color.setHex(active?0xd8efff:0x778b9b);
     }
   }
   if(firstPersonRepairRig){
