@@ -1100,9 +1100,10 @@ function buildWorld(){
       post.castShadow=true;post.receiveShadow=true;scene.add(post);
     }
   }
-  const lanternSpots=[[300,300],[800,300],[1200,300],[1600,300],[2100,300],[300,800],[800,800],[1600,800],[2100,800],[300,1300],[800,1450],[1600,1450],[2100,1300]];
+  const lanternSpots=[[300,340],[760,340],[1640,340],[2100,340],[300,850],[760,850],[1640,850],[2100,850],[300,1300],[760,1450],[1640,1450],[2100,1300]];
   for(const [x,y] of lanternSpots){const post=new THREE.Group();const iron=new THREE.MeshStandardMaterial({color:0x252b35,metalness:0.72,roughness:0.55});const wood=new THREE.MeshStandardMaterial({color:0x493a2c,roughness:0.92});const stem=new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.085,2.8,8),iron);stem.position.y=1.4;stem.castShadow=true;post.add(stem);const arm=new THREE.Mesh(new THREE.BoxGeometry(0.52,0.07,0.07),iron);arm.position.set(0.22,2.68,0);post.add(arm);const cap=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.17,0.13,8),iron);cap.position.set(0.43,2.59,0);post.add(cap);const glass=new THREE.Mesh(new THREE.SphereGeometry(0.13,12,10),new THREE.MeshStandardMaterial({color:0xffd28a,emissive:0xffa64d,emissiveIntensity:1.5,roughness:0.28}));glass.position.set(0.43,2.40,0);post.add(glass);const glow=new THREE.PointLight(0xffb86b,0.9,8.5,1.8);glow.position.set(0.43,2.38,0);post.add(glow);const base=new THREE.Mesh(new THREE.CylinderGeometry(0.22,0.25,0.18,8),wood);base.position.y=0.09;post.add(base);post.position.set(PX(x),0,PX(y));scene.add(post);}
   for (const win of windows){
+    const g = new THREE.Group();
     const fMat = new THREE.MeshStandardMaterial({color:0x6b4a2e, roughness:0.86});
     const openingDepth=PX(win.h);
     const sill = new THREE.Mesh(new THREE.BoxGeometry(0.42,0.12,openingDepth+0.18),fMat);
@@ -1873,7 +1874,7 @@ function tryHitSurvivor(ignoreAttackCooldown=false){
   survivor.health='downed';survivor.state='downed';survivor.downedTimer=90;survivor.hitCooldown=1.4;survivor.animEvent='downed';survivor.animTimer=1;survivor.isMoving=false;survivor.repairing=null;survivor.speedBoostTimer=0;survivor.invisibleTimer=0;killer.path=null;killer.carryingSurvivor=false;screenShake=16;game.hint='ПОВЕРЖЕН — убийца может поднять вас';game.hintTime=3;return true;
 }
 
-function killerCarryOrHook(){const k=killer,s=survivor;if(k.carryingSurvivor){let best=-1,bestD=Infinity;hooks.forEach((h,i)=>{const d=Math.hypot(h.x-k.x,h.y-k.y);if(!h.occupied&&d<bestD){bestD=d;best=i;}});if(best>=0&&bestD<105){const h=hooks[best];h.occupied=true;h.stage=(h.stage||0)+1;s.state='hooked';s.health='downed';s.hookIndex=best;s.hookStage=h.stage;s.hookedTimer=42;s.downedTimer=0;k.carryingSurvivor=false;k.animEvent='hook';k.animTimer=0.8;game.hint='Выживший повешен на крюк';game.hintTime=3;return true;}return false;}if(s.state==='downed'&&Math.hypot(s.x-k.x,s.y-k.y)<78){k.carryingSurvivor=true;s.state='carried';s.animEvent='carried';s.animTimer=0.5;game.hint='Выживший поднят — отнесите его к крюку';game.hintTime=3;return true;}return false;}
+function killerCarryOrHook(){const k=killer,s=survivor;if(k.carryingSurvivor){let best=-1,bestD=Infinity;hooks.forEach((h,i)=>{const d=Math.hypot(h.x-k.x,h.y-k.y);if(!h.occupied&&d<bestD){bestD=d;best=i;}});if(best>=0&&bestD<105){const h=hooks[best];h.occupied=true;s.hookStage=(s.hookStage||0)+1;h.stage=s.hookStage;s.state='hooked';s.health='downed';s.hookIndex=best;s.hookedTimer=42;s.downedTimer=0;k.carryingSurvivor=false;k.animEvent='hook';k.animTimer=0.8;game.hint='Выживший повешен на крюк';game.hintTime=3;return true;}return false;}if(s.state==='downed'&&Math.hypot(s.x-k.x,s.y-k.y)<78){k.carryingSurvivor=true;s.state='carried';s.animEvent='carried';s.animTimer=0.5;game.hint='Выживший поднят — отнесите его к крюку';game.hintTime=3;return true;}return false;}
 function updateCarriedSurvivor(){if(!killer.carryingSurvivor||survivor.state!=='carried')return;const a=killer.facing+Math.PI*0.78;survivor.x=killer.x+Math.cos(a)*42;survivor.y=killer.y+Math.sin(a)*42;survivor.facing=killer.facing;survivor.isMoving=killer.isMoving;}
 function updateHookState(dt){if(survivor.state==='downed'){survivor.downedTimer=Math.max(0,(survivor.downedTimer||90)-dt);if(survivor.downedTimer<=0){game.screen='lose';if(MP.role==='host'&&MP.connReady)MP.conn.send({type:'end',screen:'lose'});showEndScreen('ПОЙМАН','Выживший не смог выбраться','#ff5050');}}else if(survivor.state==='hooked'){survivor.hookedTimer=Math.max(0,(survivor.hookedTimer||42)-dt);if(survivor.hookedTimer<=0){const idx=survivor.hookIndex;if(hooks[idx]){hooks[idx].occupied=false;hooks[idx].stage=Math.max(hooks[idx].stage||0,survivor.hookStage||1);}if((survivor.hookStage||1)>=2){game.screen='lose';if(MP.role==='host'&&MP.connReady)MP.conn.send({type:'end',screen:'lose'});showEndScreen('ПОЙМАН','Выживший погиб на крюке','#ff5050');}else{survivor.state='downed';survivor.health='downed';survivor.downedTimer=45;survivor.hookIndex=-1;survivor.animEvent='downed';game.hint='Вы сорвались с крюка — вы ещё можете ползти';game.hintTime=3;}}}}
 
@@ -2488,6 +2489,7 @@ function dropPallet(p){
   }
 }
 function stunKiller(){
+  if(killer.carryingSurvivor){killer.carryingSurvivor=false;survivor.state='downed';survivor.health='downed';survivor.downedTimer=Math.max(survivor.downedTimer||0,45);survivor.animEvent='downed';}
   let stunDur=CFG.STUN_TIME; if(killer.hasRelentless) stunDur*=0.5;
   killer.state='stunned'; killer.stunTimer=stunDur; killer.path=null;killer.animEvent='stun';killer.animTimer=stunDur;killer.attackLungeTimer=0;killer.attackLungeTriggered=false;killer.attackChargeTimer=0;killer.attackAnimTimer=0;killer.attackHitPending=false;killer.attackHitTimer=0;killer.attackRecoveryTimer=0;killer.attackHeldPrev=false;
   if (killer.hasRage) killer.rageTimer=4;
@@ -3334,12 +3336,12 @@ function resetGame(){
   survivor.abilityCooldown=0; survivor.speedBoostTimer=0; survivor.vaultBoostTimer=0;
   survivor.invisibleTimer=0; survivor.invulnerableTimer=0;
   survivor.itemCooldown=0; survivor.itemUsed=false; survivor.hitOnce=false; survivor.slowTimer=0;survivor.flashlightCharge=0;survivor.flashlightActive=false;
-  survivor.health='healthy'; survivor.hitCooldown=0; survivor.healTimer=0; survivor.bloodTimer=0;survivor.animEvent='idle';survivor.animTimer=0;survivor.isMoving=false;
+  survivor.health='healthy'; survivor.hitCooldown=0; survivor.healTimer=0; survivor.bloodTimer=0;survivor.animEvent='idle';survivor.animTimer=0;survivor.isMoving=false;survivor.downedTimer=0;survivor.hookStage=0;survivor.hookedTimer=0;survivor.hookIndex=-1;hooks.forEach(h=>{h.stage=0;h.occupied=false;});
   survivor.noTrailTimer=0; survivor.litheTimer=0; survivor.trailTimer=0;
   survivor.repairing=null; survivor.repairTimer=0; survivor.isInChase=false; survivor.vx=0; survivor.vy=0;
 
   killer.x=2250; killer.y=1450; killer.state='idle';
-  killer.stunTimer=0; killer.breakTimer=0; killer.breakTarget=null; killer.attackCooldown=0;killer.attackRecoveryTimer=0;killer.attackHitTimer=0;killer.attackHitPending=false;killer.blindTimer=0;killer.slowTimer=0;killer.attackHeldPrev=false;killer.attackChargeTimer=0;killer.attackLungeTimer=0;killer.attackAnimTimer=0;killer.attackAnimType='';killer.animEvent='idle';killer.animTimer=0;
+  killer.stunTimer=0; killer.breakTimer=0; killer.breakTarget=null; killer.attackCooldown=0;killer.attackRecoveryTimer=0;killer.attackHitTimer=0;killer.attackHitPending=false;killer.blindTimer=0;killer.slowTimer=0;killer.attackHeldPrev=false;killer.interactHeldPrev=false;killer.carryingSurvivor=false;killer.attackChargeTimer=0;killer.attackLungeTimer=0;killer.attackAnimTimer=0;killer.attackAnimType='';killer.animEvent='idle';killer.animTimer=0;
   killer.vaultTimer=0; killer.facing=Math.PI; killer.pitch=0; killer.walkPhase=0;
   killer.path=null; killer.pathTimer=0; killer.stuckTimer=0; killer.palletStuckTimer=0;
   killer.dashCooldown=0; killer.dashWindupTimer=0; killer.dashTimer=0;
