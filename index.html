@@ -2653,19 +2653,21 @@ function sync3D(dt){
   killerMesh.position.set(PX(killer.x), 0, PX(killer.y));
   killerMesh.rotation.y = -killer.facing + Math.PI/2;
   const kSwing = Math.sin(killer.walkPhase) * 0.5;
+  const kOpposite = Math.sin(killer.walkPhase + Math.PI) * 0.5;
   const killerBreath=Math.sin(performance.now()/1000*1.35)*0.014;
+  const killerMoving=killer.isMoving&&killer.state==='idle';
   const ku = killerMesh.userData;
   if (ku.lArm) ku.lArm.rotation.x = kSwing;
   if (ku.rArm) ku.rArm.rotation.x = -kSwing;
-  if (ku.lElbow) ku.lElbow.rotation.x = killer.walkPhase>0?0.12:0;
-  if (ku.rElbow) ku.rElbow.rotation.x = killer.walkPhase>0?0.12:0;
-  if(ku.pelvisBone)ku.pelvisBone.rotation.z=killer.isMoving?Math.sin(killer.walkPhase)*0.025:0;
-  if(ku.spineBone)ku.spineBone.rotation.x=killer.state==='breaking'?-0.14:Math.sin(killer.walkPhase*2)*0.025;
-  if(ku.chestBone){ku.chestBone.rotation.z=killer.state==='stunned'?Math.sin(performance.now()/170)*0.045:Math.sin(killer.walkPhase)*0.018;ku.chestBone.rotation.x=killer.isMoving?Math.sin(killer.walkPhase*2+0.4)*0.025:0;}
+  if (ku.lElbow) ku.lElbow.rotation.x = killerMoving?0.16+Math.max(0,kOpposite)*0.22:0;
+  if (ku.rElbow) ku.rElbow.rotation.x = killerMoving?0.16+Math.max(0,kSwing)*0.22:0;
+  if(ku.pelvisBone){ku.pelvisBone.rotation.z=killerMoving?Math.sin(killer.walkPhase*2)*0.035:0;ku.pelvisBone.rotation.x=killerMoving?Math.sin(killer.walkPhase*2+0.5)*0.025:0;}
+  if(ku.spineBone)ku.spineBone.rotation.x=killer.state==='breaking'?-0.14:(killerMoving?Math.sin(killer.walkPhase*2)*0.045:0);
+  if(ku.chestBone){ku.chestBone.rotation.z=killer.state==='stunned'?Math.sin(performance.now()/170)*0.045:(killerMoving?Math.sin(killer.walkPhase)*0.026:0);ku.chestBone.rotation.x=killerMoving?Math.sin(killer.walkPhase*2+0.4)*0.035:0;}
   if (ku.lLeg) ku.lLeg.rotation.x = -kSwing;
   if (ku.rLeg) ku.rLeg.rotation.x = kSwing;
-  if (ku.lKnee) ku.lKnee.rotation.x = Math.max(0,-kSwing)*0.35;
-  if (ku.rKnee) ku.rKnee.rotation.x = Math.max(0,kSwing)*0.35;
+  if (ku.lKnee) ku.lKnee.rotation.x = killerMoving?0.08+Math.max(0,-kSwing)*0.52:Math.max(0,-kSwing)*0.2;
+  if (ku.rKnee) ku.rKnee.rotation.x = killerMoving?0.08+Math.max(0,kSwing)*0.52:Math.max(0,kSwing)*0.2;
   if(killer.state==='vaulting'){
     const t=killer.vaultTimer/killer.vaultDuration,arc=Math.sin(t*Math.PI);
     killerMesh.position.y=arc*1.35;killerMesh.rotation.x=arc*0.42;
@@ -2697,14 +2699,19 @@ function sync3D(dt){
     if(ku.spineBone)ku.spineBone.rotation.x=0.12+Math.sin(phase)*0.035;
     if(ku.chestBone)ku.chestBone.rotation.x=-0.18;
   }else if(killer.attackAnimTimer>0){
-    const p=1-killer.attackAnimTimer/0.5,sw=Math.sin(Math.min(1,p)*Math.PI);
-    if(ku.rArm)ku.rArm.rotation.x=-1.7+sw*1.6;
-    if(ku.rElbow)ku.rElbow.rotation.x=-0.9+sw*0.5;
-    if(ku.body)ku.body.rotation.z=-0.1+sw*0.2;
-    if(ku.pelvisBone)ku.pelvisBone.rotation.z=-0.08*sw;
-    if(ku.spineBone)ku.spineBone.rotation.x=-0.18*sw;
-    if(ku.chestBone)ku.chestBone.rotation.x=0.24*sw;
-    if(ku.headPivot)ku.headPivot.rotation.x=0.08*sw;
+    const p=THREE.MathUtils.clamp(1-killer.attackAnimTimer/0.5,0,1);
+    // Three-part attack: wind-up, fast strike, then a short weighted follow-through.
+    const wind=Math.max(0,1-p/0.28);
+    const strike=Math.sin(THREE.MathUtils.clamp((p-0.18)/0.48,0,1)*Math.PI/2);
+    const follow=Math.max(0,Math.sin((p-0.58)/0.42*Math.PI));
+    if(ku.rArm)ku.rArm.rotation.x=-0.22-1.18*wind+1.62*strike+0.18*follow;
+    if(ku.rElbow)ku.rElbow.rotation.x=-0.22-0.55*wind+0.72*strike;
+    if(ku.lArm)ku.lArm.rotation.x=0.18-0.62*wind-0.24*strike;
+    if(ku.body)ku.body.rotation.z=-0.08*wind+0.16*strike-0.045*follow;
+    if(ku.pelvisBone)ku.pelvisBone.rotation.z=-0.06*wind+0.10*strike;
+    if(ku.spineBone)ku.spineBone.rotation.x=-0.14*wind-0.12*strike+0.045*follow;
+    if(ku.chestBone)ku.chestBone.rotation.x=0.10*wind+0.28*strike-0.06*follow;
+    if(ku.headPivot)ku.headPivot.rotation.x=0.04*wind+0.10*strike-0.025*follow;
   }else{
     killerMesh.rotation.x=0;if(ku.body)ku.body.rotation.z*=0.9;
     if(!killer.isMoving&&ku.bodyPivot){ku.bodyPivot.rotation.x=killerBreath*0.45;ku.bodyPivot.rotation.z=killerBreath;}
