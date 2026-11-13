@@ -2694,6 +2694,7 @@ function sync3D(dt){
       firstPersonKillerRig.wrist.rotation.set(-0.12-0.34*wind+0.48*strike-0.24*follow+idleBob,0.03*strike,0.04+0.14*wind-0.22*strike+0.08*follow);
       firstPersonKillerRig.group.rotation.x=-0.12-0.12*wind+0.08*strike;
       firstPersonKillerRig.group.rotation.z=-0.025-0.045*wind+0.055*strike;
+      if(killer.carryingSurvivor){firstPersonKillerRig.upper.rotation.set(-0.48,-0.04,-0.22);firstPersonKillerRig.wrist.rotation.set(-0.22,0.02,0.10);firstPersonKillerRig.group.rotation.z=-0.12;}
     }
   }
   if(flashlightWorldBeam){
@@ -2848,6 +2849,12 @@ function sync3D(dt){
   if (ku.rLeg) ku.rLeg.rotation.x = kSwing;
   if (ku.lKnee) ku.lKnee.rotation.x = killerMoving?0.08+Math.max(0,-kSwing)*0.52:Math.max(0,-kSwing)*0.2;
   if (ku.rKnee) ku.rKnee.rotation.x = killerMoving?0.08+Math.max(0,kSwing)*0.52:Math.max(0,kSwing)*0.2;
+  if(killer.carryingSurvivor){
+    if(ku.lArm)ku.lArm.rotation.x=-0.92;if(ku.rArm)ku.rArm.rotation.x=-1.08;
+    if(ku.lElbow)ku.lElbow.rotation.x=-0.55;if(ku.rElbow)ku.rElbow.rotation.x=-0.72;
+    if(ku.lHand)ku.lHand.rotation.x=-0.18;if(ku.rHand)ku.rHand.rotation.x=-0.25;
+    if(ku.spineBone)ku.spineBone.rotation.x=-0.18;if(ku.chestBone)ku.chestBone.rotation.x=0.12;
+  }
   if(killer.state==='vaulting'){
     const t=killer.vaultTimer/killer.vaultDuration,arc=Math.sin(t*Math.PI);
     killerMesh.position.y=arc*1.35;killerMesh.rotation.x=arc*0.42;
