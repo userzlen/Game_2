@@ -1551,8 +1551,15 @@ function makeFirstPersonKillerRig(){
   const blade=new THREE.Mesh(new THREE.ExtrudeGeometry(shape,{depth:0.035,bevelEnabled:true,bevelSegments:2,steps:1,bevelSize:0.009,bevelThickness:0.008}),bladeMat);
   blade.position.set(0,0.035,-0.095);wrist.add(blade);
   const fuller=new THREE.Mesh(new THREE.BoxGeometry(0.012,0.43,0.006),edgeMat);fuller.position.set(0,0.34,-0.055);wrist.add(fuller);
-  for(let i=0;i<3;i++){const finger=new THREE.Mesh(new THREE.CapsuleGeometry(0.022,0.075,3,6),gloveMat);finger.position.set(-0.075+i*0.025,-0.075,-0.005);finger.rotation.z=-0.55;wrist.add(finger);}
-  const thumb=new THREE.Mesh(new THREE.CapsuleGeometry(0.023,0.07,3,6),gloveMat);thumb.position.set(0.085,-0.035,-0.045);thumb.rotation.z=0.82;wrist.add(thumb);
+  function addRoundedFinger(radius,length,position,rotation){
+    const finger=new THREE.Group();finger.position.set(position[0],position[1],position[2]);finger.rotation.z=rotation;
+    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(radius,radius,length,7),gloveMat);finger.add(shaft);
+    const capTop=new THREE.Mesh(new THREE.SphereGeometry(radius,7,5),gloveMat);capTop.position.y=length/2;finger.add(capTop);
+    const capBottom=new THREE.Mesh(new THREE.SphereGeometry(radius,7,5),gloveMat);capBottom.position.y=-length/2;finger.add(capBottom);
+    wrist.add(finger);
+  }
+  for(let i=0;i<3;i++)addRoundedFinger(0.022,0.075,[-0.075+i*0.025,-0.075,-0.005],-0.55);
+  addRoundedFinger(0.023,0.07,[0.085,-0.035,-0.045],0.82);
   group.visible=false;return{group,upper,wrist,blade};
 }
 function makeKillerMesh(){
