@@ -776,7 +776,7 @@ function initThree(){
 
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0a1018);
-  scene.fog = new THREE.Fog(0x0a1018, 30, 90);
+  scene.fog = new THREE.FogExp2(0x111923, 0.022);
 
   camera3d = new THREE.PerspectiveCamera(75, CFG.W / Math.max(1, CFG.H), 0.1, 300);
   const flashlightLight=new THREE.SpotLight(0xddeeff,0,PX(CFG.FLASHLIGHT_RANGE),0.34,0.62,1);flashlightLight.position.set(0.12,-0.12,-0.18);flashlightLight.target.position.set(0,0,-1);camera3d.add(flashlightLight);camera3d.add(flashlightLight.target);
@@ -790,11 +790,12 @@ function initThree(){
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
+  renderer.toneMappingExposure = 1.12;
   if (THREE.sRGBEncoding !== undefined) renderer.outputEncoding = THREE.sRGBEncoding;
   renderer.setClearColor(0x0a1018, 1);
 
-  scene.add(new THREE.AmbientLight(0x6a7a9a, 0.85));
+  scene.add(new THREE.HemisphereLight(0x8497ad,0x24251d,0.72));
+  scene.add(new THREE.AmbientLight(0x65738a, 0.48));
   sunLight = new THREE.DirectionalLight(0xc0d8ff, 1.2);
   sunLight.position.set(15, 40, 15);
   sunLight.castShadow = true;
@@ -944,6 +945,65 @@ function makeStump(r){
 
 // Keep decorative props clear of gameplay objects. If a prop overlaps a wall,
 // generator, pallet, window or another prop, move it to the nearest free grid point.
+
+function buildForestSetDressing(){
+  // Deterministic, instanced ground detail: richer forest floor without hundreds of draw calls.
+  let seed=0x51a7c3;
+  const rand=()=>{seed=(seed*1664525+1013904223)>>>0;return seed/4294967296;};
+  const clearSpot=(x,y,pad=52)=>{
+    if(Math.hypot(x-150,y-150)<pad+90||Math.hypot(x-2250,y-1450)<pad+90)return false;
+    for(const g of generators)if(Math.hypot(x-g.x,y-g.y)<pad+82)return false;
+    if(Math.hypot(x-totem.x,y-totem.y)<pad+42)return false;
+    for(const p of pallets)if(Math.hypot(x-p.x,y-p.y)<pad+48)return false;
+    for(const e of exitDoors)if(circleRect(x,y,pad,e.x-20,e.y-20,e.w+40,e.h+40))return false;
+    for(const w of walls)if(circleRect(x,y,pad,w.x,w.y,w.w,w.h))return false;
+    return true;
+  };
+  const dummy=new THREE.Object3D();
+  const grassGeo=new THREE.ConeGeometry(0.022,0.17,3);
+  const grassMat=new THREE.MeshStandardMaterial({color:0x536342,roughness:1,flatShading:true});
+  const grass=new THREE.InstancedMesh(grassGeo,grassMat,560);
+  let grassCount=0;
+  for(let i=0;i<1800&&grassCount<560;i++){
+    const x=45+rand()*2310,y=45+rand()*1510;
+    if(!clearSpot(x,y,12))continue;
+    dummy.position.set(PX(x),0.075,PX(y));
+    dummy.rotation.set((rand()-0.5)*0.18,rand()*Math.PI*2,(rand()-0.5)*0.18);
+    const scale=0.55+rand()*1.2;dummy.scale.set(scale,scale,scale);dummy.updateMatrix();
+    grass.setMatrixAt(grassCount++,dummy.matrix);
+  }
+  grass.count=grassCount;grass.instanceMatrix.needsUpdate=true;scene.add(grass);
+
+  const stoneGeo=new THREE.IcosahedronGeometry(0.12,0);
+  const stoneMat=new THREE.MeshStandardMaterial({color:0x555650,roughness:1,flatShading:true});
+  const stones=new THREE.InstancedMesh(stoneGeo,stoneMat,180);
+  let stoneCount=0;
+  for(let i=0;i<900&&stoneCount<180;i++){
+    const x=35+rand()*2330,y=35+rand()*1530;
+    if(!clearSpot(x,y,28))continue;
+    dummy.position.set(PX(x),0.045,PX(y));
+    dummy.rotation.set(rand()*0.4,rand()*Math.PI*2,rand()*0.4);
+    dummy.scale.set(0.45+rand()*1.1,0.25+rand()*0.55,0.45+rand()*1.1);
+    dummy.updateMatrix();stones.setMatrixAt(stoneCount++,dummy.matrix);
+  }
+  stones.count=stoneCount;stones.instanceMatrix.needsUpdate=true;scene.add(stones);
+
+  // Four weathered signal posts establish landmarks around the playable perimeter.
+  const postMat=new THREE.MeshStandardMaterial({color:0x30251e,roughness:0.98});
+  const ironMat=new THREE.MeshStandardMaterial({color:0x494d4b,metalness:0.55,roughness:0.72});
+  const flameMat=new THREE.MeshBasicMaterial({color:0xff9a42});
+  for(const [x,y] of [[100,350],[2300,350],[100,1250],[2300,1250]]){
+    const post=new THREE.Group();
+    const base=new THREE.Mesh(new THREE.CylinderGeometry(0.24,0.3,0.22,7),ironMat);base.position.y=0.11;post.add(base);
+    const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.075,0.11,1.75,7),postMat);shaft.position.y=1.02;shaft.castShadow=true;post.add(shaft);
+    const cross=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.09,0.09),postMat);cross.position.y=1.7;post.add(cross);
+    const cage=new THREE.Mesh(new THREE.OctahedronGeometry(0.19,0),ironMat);cage.position.y=1.94;post.add(cage);
+    const flame=new THREE.Mesh(new THREE.SphereGeometry(0.105,8,7),flameMat);flame.position.y=1.94;post.add(flame);
+    const glow=new THREE.PointLight(0xff8a3c,0.72,5);glow.position.y=1.98;post.add(glow);
+    post.position.set(PX(x),0,PX(y));scene.add(post);
+  }
+}
+
 function sanitizeDecorLayout(){
   const blocked = (x,y,r,index) => {
     if (x < r+55 || x > 2400-r-55 || y < r+55 || y > 1600-r-55) return true;
@@ -1222,6 +1282,7 @@ function buildWorld(){
     else if (d.type === 'stump') m = makeStump(r);
     if (m){ m.position.set(PX(d.x), 0, PX(d.y)); scene.add(m); }
   }
+  buildForestSetDressing();
   for (let i = 0; i < 100; i++){
     const mat = new THREE.MeshBasicMaterial({color:0x8a1515, transparent:true, opacity:0});
     const geo = new THREE.CircleGeometry(0.1, 6); geo.rotateX(-Math.PI/2);
@@ -2511,6 +2572,8 @@ function sync3D(dt){
     survivorMesh.position.set(PX(survivor.x), 0, PX(survivor.y));
     survivorMesh.rotation.y = -survivor.facing + Math.PI/2;
     const moving = survivor.isMoving && survivor.state === 'idle';
+    const idleBreath=Math.sin(performance.now()/1000*1.7)*0.012;
+    const injuredLean=survivor.health==='injured'&&moving?0.035+Math.sin(survivor.walkPhase*0.5)*0.012:0;
     const swing = Math.sin(survivor.walkPhase) * 0.6;
     const u = survivorMesh.userData;
     const repairing=!!(survivor.repairing&&survivor.repairing.type==='gen');
@@ -2565,6 +2628,8 @@ function sync3D(dt){
       if(u.lKnee)u.lKnee.rotation.x=0.18;if(u.rKnee)u.rKnee.rotation.x=0.18;
     }else{
       survivorMesh.rotation.x=0;survivorMesh.rotation.z*=0.82;
+      if(!moving&&!repairing&&u.bodyPivot){u.bodyPivot.rotation.z=idleBreath;u.bodyPivot.rotation.x=idleBreath*0.35;}
+      if(u.headPivot){u.headPivot.rotation.y=Math.sin(performance.now()/1000*0.42)*0.035;u.headPivot.rotation.z=injuredLean;}
       if(u.bodyPivot){u.bodyPivot.rotation.x*=0.82;u.bodyPivot.rotation.z*=0.82;}
       if(u.headPivot)u.headPivot.rotation.z*=0.82;
       if(survivor.health==='injured'&&moving){survivorMesh.rotation.z=0.035*Math.sin(survivor.walkPhase*0.5);if(u.headPivot)u.headPivot.rotation.z=0.04;}
@@ -2574,6 +2639,7 @@ function sync3D(dt){
   killerMesh.position.set(PX(killer.x), 0, PX(killer.y));
   killerMesh.rotation.y = -killer.facing + Math.PI/2;
   const kSwing = Math.sin(killer.walkPhase) * 0.5;
+  const killerBreath=Math.sin(performance.now()/1000*1.35)*0.014;
   const ku = killerMesh.userData;
   if (ku.lArm) ku.lArm.rotation.x = kSwing;
   if (ku.rArm) ku.rArm.rotation.x = -kSwing;
@@ -2627,6 +2693,8 @@ function sync3D(dt){
     if(ku.headPivot)ku.headPivot.rotation.x=0.08*sw;
   }else{
     killerMesh.rotation.x=0;if(ku.body)ku.body.rotation.z*=0.9;
+    if(!killer.isMoving&&ku.bodyPivot){ku.bodyPivot.rotation.x=killerBreath*0.45;ku.bodyPivot.rotation.z=killerBreath;}
+    if(ku.headPivot){ku.headPivot.rotation.y=Math.sin(performance.now()/1000*0.36)*0.025;}
     if(ku.pelvisBone){ku.pelvisBone.rotation.z*=0.82;}
     if(ku.spineBone){ku.spineBone.rotation.x*=0.82;}
     if(ku.chestBone){ku.chestBone.rotation.x*=0.82;ku.chestBone.rotation.z*=0.82;}
